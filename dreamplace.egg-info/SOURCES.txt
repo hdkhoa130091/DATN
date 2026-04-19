@@ -1,6 +1,0 @@
-setup.py
-dreamplace/__init__.py
-dreamplace.egg-info/PKG-INFO
-dreamplace.egg-info/SOURCES.txt
-dreamplace.egg-info/dependency_links.txt
-dreamplace.egg-info/top_level.txt

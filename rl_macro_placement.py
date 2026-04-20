@@ -5,14 +5,22 @@ Integration with circuit_training for chip design
 """
 
 import sys
+import os
 sys.path.insert(0, '/home/DATN/DREAMPlace/install')
+
+# Fix Python 3 imports for DREAMPlace
+root_dir = '/home/DATN/DREAMPlace/install'
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 import torch
 import numpy as np
 import json
-import os
-from dreamplace.Placer import Placer
+
+# Import DREAMPlace modules with proper Python 3 compatibility
+import dreamplace.configure as configure
 from dreamplace.Params import Params
+from dreamplace.Placer import Placer
 
 class MacroPlacementEnv:
     """Gym-like environment for macro placement using DREAMPlace"""

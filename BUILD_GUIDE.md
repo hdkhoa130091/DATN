@@ -1,9 +1,10 @@
 # RL Macro Placement - Build & Run Guide
 
-## Current Status (April 20, 2026)
+## Current Status (April 21, 2026)
 
-**Working Solution**: Simplified RL environment with Gymnasium + Stable-Baselines3
-**Partial**: DREAMPlace integration (build issues with CUDA)
+**Working Solution A**: Simplified RL environment with Gymnasium + Stable-Baselines3
+**Working Solution B**: Open-source RTL-to-placement flow with ORFS + OpenROAD + Yosys
+**Partial**: DREAMPlace integration (not needed for the current milestone)
 
 ---
 
@@ -30,6 +31,26 @@ Training complete!
 ============================================================
 ```
 
+### 2. Run Open-Source RTL Flow (Working Through Place)
+
+```bash
+cd /home/DATN/OpenROAD-flow-scripts/flow
+
+QT_QPA_PLATFORM=offscreen \
+make DESIGN_CONFIG=./designs/nangate45/gcd/config.mk \
+  YOSYS_EXE=/home/DATN/oss-cad-suite-20260421/bin/yosys \
+  OPENROAD_EXE=/usr/bin/openroad \
+  synth floorplan place -j1
+```
+
+**Key output directory**:
+- `/home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base`
+
+**Key generated files**:
+- `1_synth.odb`, `1_synth.sdc`
+- `2_floorplan.odb`, `2_floorplan.sdc`
+- `3_place.odb`, `3_place.sdc`
+
 ---
 
 ## Full Setup Guide
@@ -39,10 +60,34 @@ Training complete!
 ```bash
 # System dependencies
 apt-get update
-apt-get install -y cmake flex bison libboost-all-dev tcl-dev wget swig git
+apt-get install -y \
+  cmake make ninja-build pkg-config flex bison libboost-all-dev \
+  tcl-dev swig git curl wget python3-pip python3-venv \
+  iverilog verilator yosys klayout magic netgen gtkwave
 
 # Python 3.10+
 python3 --version  # Should be 3.10 or higher
+```
+
+### OpenROAD Prebuilt Package
+
+```bash
+cd /tmp
+curl -L \
+  https://github.com/Precision-Innovations/OpenROAD/releases/download/2024-12-14/openroad_2.0-17598-ga008522d8_amd64-ubuntu-22.04.deb \
+  -o openroad_2.0-17598-ga008522d8_amd64-ubuntu-22.04.deb
+apt-get install -y ./openroad_2.0-17598-ga008522d8_amd64-ubuntu-22.04.deb
+```
+
+### Modern Yosys via OSS CAD Suite
+
+```bash
+cd /home/DATN
+curl -L \
+  https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-04-21/oss-cad-suite-linux-x64-20260421.tgz \
+  -o oss-cad-suite-linux-x64-20260421.tgz
+mkdir -p /home/DATN/oss-cad-suite-20260421
+tar -xzf oss-cad-suite-linux-x64-20260421.tgz -C /home/DATN/oss-cad-suite-20260421 --strip-components=1
 ```
 
 ### Step 1: Clone Repositories
@@ -51,13 +96,16 @@ python3 --version  # Should be 3.10 or higher
 cd /home/DATN
 
 # Clone MacroPlacement
-git clone https://github.com/TILOS-AI-Institute/MacroPlace MacroPlacement
+git clone https://github.com/TILOS-AI-Institute/MacroPlacement MacroPlacement
 
 # Clone circuit_training
 git clone https://github.com/google-research/circuit_training.git circuit_training
 
-# Clone DREAMPlace with submodules
-git clone --recursive https://github.com/limbo018/DREAMPlace.git DREAMPlace
+# Download OpenROAD-flow-scripts
+curl -L https://codeload.github.com/The-OpenROAD-Project/OpenROAD-flow-scripts/tar.gz/refs/heads/master \
+  -o orfs.tar.gz
+tar -xzf orfs.tar.gz
+mv OpenROAD-flow-scripts-master OpenROAD-flow-scripts
 ```
 
 ### Step 2: Install Python Dependencies
@@ -142,6 +190,8 @@ done
 
 ```
 /home/DATN/
+├── OpenROAD-flow-scripts/    # Open-source RTL-to-GDS flow
+├── oss-cad-suite-20260421/   # Newer Yosys and EDA tools
 ├── MacroPlacement/          # TILOS AI Institute placement framework
 │   ├── CodeElements/
 │   ├── Flows/
@@ -149,12 +199,7 @@ done
 ├── circuit_training/        # Google RL for chip design
 │   ├── circuit_training/
 │   └── tools/
-├── DREAMPlace/              # Placement engine (build issues)
-│   ├── benchmarks/          # ISPD2005 testcases
-│   ├── build/               # Build directory
-│   ├── dreamplace/          # Source code
-│   ├── install/             # Installation (if build succeeds)
-│   └── thirdparty/          # Submodules
+├── DREAMPlace/              # Optional placement backend / separate track
 ├── rl_macro_placement.py    # Original DREAMPlace integration attempt
 ├── rl_macro_placement_v2.py # **Working** simplified RL environment
 ├── PROGRESS.md              # Detailed progress log
@@ -164,6 +209,34 @@ done
 ---
 
 ## Working Components
+
+### 0. Open-Source Flow Already Proven on This Machine
+
+**Design**: `nangate45/gcd`
+
+**Succeeded stages**:
+- synthesis
+- floorplan
+- placement
+
+**Command used**:
+```bash
+cd /home/DATN/OpenROAD-flow-scripts/flow
+QT_QPA_PLATFORM=offscreen \
+make DESIGN_CONFIG=./designs/nangate45/gcd/config.mk \
+  YOSYS_EXE=/home/DATN/oss-cad-suite-20260421/bin/yosys \
+  OPENROAD_EXE=/usr/bin/openroad \
+  synth floorplan place -j1
+```
+
+**Why `-j1`**:
+- avoids dependency race issues seen with newer ORFS on this setup
+
+**Why custom `YOSYS_EXE`**:
+- Ubuntu package `yosys 0.9` is too old for the current ORFS scripts
+
+**Why `QT_QPA_PLATFORM=offscreen`**:
+- avoids GUI/display issues in headless environment for some Qt-based tools
 
 ### 1. RL Environment (`rl_macro_placement_v2.py`)
 

@@ -51,6 +51,38 @@ make DESIGN_CONFIG=./designs/nangate45/gcd/config.mk \
 - `2_floorplan.odb`, `2_floorplan.sdc`
 - `3_place.odb`, `3_place.sdc`
 
+### 3. Open OpenROAD GUI Smoothly Over VNC
+
+On the Ubuntu host:
+
+```bash
+cd /home/DATN/tools/openroad-remote-gui
+chmod +x *.sh
+./install_vnc_host.sh
+vncpasswd
+./start_vnc_host.sh
+```
+
+On your local machine, create an SSH tunnel:
+
+```bash
+ssh -L 5901:127.0.0.1:5901 <ubuntu-user>@<ubuntu-host>
+```
+
+Then open your VNC viewer to `127.0.0.1:5901`.
+Inside the VNC desktop terminal:
+
+```bash
+openroad -gui
+```
+
+Load a checkpoint:
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/2_floorplan.odb
+gui::fit
+```
+
 ---
 
 ## Full Setup Guide
@@ -237,6 +269,52 @@ make DESIGN_CONFIG=./designs/nangate45/gcd/config.mk \
 
 **Why `QT_QPA_PLATFORM=offscreen`**:
 - avoids GUI/display issues in headless environment for some Qt-based tools
+
+### 0.1 Recommended GUI Workflow
+
+Use terminal mode for the full ORFS run and TigerVNC only for checkpoint viewing.
+This is the preferred setup because `openroad -gui` over `ssh -X/-Y` is often laggy
+or freezes, while VNC keeps rendering on the Ubuntu host.
+
+Host-side setup:
+
+```bash
+cd /home/DATN/tools/openroad-remote-gui
+chmod +x *.sh
+./install_vnc_host.sh
+vncpasswd
+./start_vnc_host.sh
+```
+
+Local machine:
+
+```bash
+ssh -L 5901:127.0.0.1:5901 <ubuntu-user>@<ubuntu-host>
+vncviewer 127.0.0.1:5901
+```
+
+Inside the VNC desktop:
+
+```bash
+openroad -gui
+```
+
+Useful checkpoints:
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/2_floorplan.odb
+gui::fit
+```
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/3_place.odb
+gui::fit
+```
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/6_final.odb
+gui::fit
+```
 
 ### 1. RL Environment (`rl_macro_placement_v2.py`)
 

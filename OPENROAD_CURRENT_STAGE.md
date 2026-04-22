@@ -157,82 +157,61 @@ After the run, these files should exist:
 /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/6_final.spef
 ```
 
-## Optional GUI Checkpoint Viewing
+## Recommended GUI Path
 
-Use a separate SSH/X11 session only when you want to inspect checkpoints:
+For checkpoint viewing, use the host-side TigerVNC helper instead of `ssh -X/-Y`.
+Run OpenROAD in terminal mode for long jobs, then open the GUI only when you want
+to inspect a saved `.odb` checkpoint.
 
-```bash
-openroad -gui
-```
-
-Then in the OpenROAD Tcl input:
-
-```tcl
-read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/2_floorplan.odb
-gui::fit
-```
-
-Later:
-
-```tcl
-read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/3_place.odb
-gui::fit
-```
-
-And finally:
-
-```tcl
-read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/6_final.odb
-gui::fit
-```
-
-## Optional Docker SSH GUI Path
-
-If you want to open the OpenROAD GUI from a Docker container instead of the host shell, use the helper files in `/home/DATN/tools/openroad-docker-ssh`:
-
-```bash
-cd /home/DATN/tools/openroad-docker-ssh
-./build_run.sh
-./ssh_openroad.sh
-```
-
-Then inside the container SSH shell:
-
-```bash
-openroad -gui
-```
-
-This path depends on:
-
-- Docker being installed on the host
-- your current terminal already having working X11 forwarding
-- entering the container through `ssh -X` so the GUI display is forwarded correctly
-
-## Recommended Faster GUI Path
-
-For better responsiveness than SSH X11 forwarding, use the host-side TigerVNC helper:
+One-time setup on the Ubuntu host:
 
 ```bash
 cd /home/DATN/tools/openroad-remote-gui
 chmod +x *.sh
 ./install_vnc_host.sh
 vncpasswd
+```
+
+Start a VNC desktop on the Ubuntu host:
+
+```bash
+cd /home/DATN/tools/openroad-remote-gui
 ./start_vnc_host.sh
 ```
 
-From your local machine:
+From your local machine, create an SSH tunnel:
 
 ```bash
 ssh -L 5901:127.0.0.1:5901 Ubuntu
 ```
 
-Then connect your VNC client to `127.0.0.1:5901` and run inside the remote desktop:
+Then open your VNC client to `127.0.0.1:5901`.
+
+Inside the remote desktop terminal, run:
 
 ```bash
 openroad -gui
 ```
 
-This is usually much smoother than `ssh -X/-Y`, especially for checkpoint viewing.
+Suggested checkpoints:
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/2_floorplan.odb
+gui::fit
+```
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/3_place.odb
+gui::fit
+```
+
+```tcl
+read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/6_final.odb
+gui::fit
+```
+
+This is the recommended day-to-day setup because it is usually much smoother than
+`ssh -X/-Y`, especially on Fedora-to-Ubuntu remote sessions.
 
 ## What Not To Chase Yet
 

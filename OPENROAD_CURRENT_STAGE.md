@@ -113,6 +113,20 @@ path.write_text(text)
 PY
 ```
 
+On newer ORFS revisions with this older OpenROAD binary, `floorplan.tcl` may also fail on
+`repair_timing ... -sequence ...`.
+Use the repo helper to apply all known compatibility fixes at once:
+
+```bash
+python3 /home/DATN/tools/patch_orfs_compat.py
+```
+
+Today that helper handles:
+
+- `cts.tcl`: split `repair_clock_nets` into a separate command
+- `floorplan.tcl`: remove unsupported `repair_timing -sequence ...`
+- `util.tcl`: stop appending `-sequence` from `SETUP_MOVE_SEQUENCE`
+
 ## Run To The Current Milestone
 
 Run the flow in terminal mode:
@@ -171,6 +185,54 @@ And finally:
 read_db /home/DATN/OpenROAD-flow-scripts/flow/results/nangate45/gcd/base/6_final.odb
 gui::fit
 ```
+
+## Optional Docker SSH GUI Path
+
+If you want to open the OpenROAD GUI from a Docker container instead of the host shell, use the helper files in `/home/DATN/tools/openroad-docker-ssh`:
+
+```bash
+cd /home/DATN/tools/openroad-docker-ssh
+./build_run.sh
+./ssh_openroad.sh
+```
+
+Then inside the container SSH shell:
+
+```bash
+openroad -gui
+```
+
+This path depends on:
+
+- Docker being installed on the host
+- your current terminal already having working X11 forwarding
+- entering the container through `ssh -X` so the GUI display is forwarded correctly
+
+## Recommended Faster GUI Path
+
+For better responsiveness than SSH X11 forwarding, use the host-side TigerVNC helper:
+
+```bash
+cd /home/DATN/tools/openroad-remote-gui
+chmod +x *.sh
+./install_vnc_host.sh
+vncpasswd
+./start_vnc_host.sh
+```
+
+From your local machine:
+
+```bash
+ssh -L 5901:127.0.0.1:5901 Ubuntu
+```
+
+Then connect your VNC client to `127.0.0.1:5901` and run inside the remote desktop:
+
+```bash
+openroad -gui
+```
+
+This is usually much smoother than `ssh -X/-Y`, especially for checkpoint viewing.
 
 ## What Not To Chase Yet
 

@@ -1,5 +1,207 @@
 # Full Open-Source RTL-to-RL Macro Placement Guide
 
+## Workflow đầy đủ toàn bộ quá trình
+
+### Workflow rút gọn: tool, input, output, RL state-action-reward
+
+```mermaid
+flowchart LR
+    A[RTL\n.v .sv] --> B[Verification\niverilog / verilator]
+    B --> C[Synthesis\nyosys]
+    C --> D[Gate netlist + constraints\n.v + .sdc]
+    D --> E[Physical design\nOpenROAD / ORFS]
+    E --> F[EDA checkpoints\n.odb .def .spef .v]
+    F --> G[Format translation\nMacroPlacement]
+    G --> H[RL inputs\nnetlist.pb.txt + initial.plc]
+    H --> I[RL training\ncircuit_training / PPO]
+    I --> J[RL output\n.plc]
+    J --> K[Back to OpenROAD\nre-evaluate QoR]
+    K --> L[Metrics\nHPWL congestion WNS TNS area]
+```
+
+| Bước | Phần mềm chính | Input | Output | Ghi chú |
+|---|---|---|---|---|
+| 1. Verify RTL | `iverilog`, `verilator` | `.v`, `.sv`, testbench | log, `.vcd` | kiểm tra chức năng |
+| 2. Synthesis | `yosys` | RTL + `.lib` | gate netlist `.v`, `.sdc` | chuyển RTL sang netlist cell chuẩn |
+| 3. Floorplan/Place/Route baseline | `OpenROAD`, `ORFS` | `.v`, `.sdc`, `.lef`, `.lib`, config | `.odb`, `.def`, `.spef`, final `.v` | tạo dữ liệu vật lý baseline |
+| 4. Chuyển format cho RL | `MacroPlacement` | `.lef`, `.def`, netlist, metadata | `netlist.pb.txt`, `initial.plc` | biến dữ liệu EDA thành input RL |
+| 5. Train RL | `circuit_training` | `netlist.pb.txt`, `initial.plc` | policy checkpoint, `.plc` | học cách đặt macro |
+| 6. Đánh giá lại | `OpenROAD` | `.plc` + dữ liệu EDA | QoR sau place/cts/route | so với baseline không RL |
+
+### RL nhìn bài toán như thế nào
+
+| Thành phần | Ý nghĩa |
+|---|---|
+| `State / Observation` | thông tin netlist, macro hiện tại, vị trí macro đã đặt, occupancy grid, mask vị trí hợp lệ |
+| `Action` | chọn một grid cell hoặc vị trí `(x, y)` hợp lệ cho macro hiện tại |
+| `Reward` | thường là âm của proxy cost, ví dụ `-(HPWL + density penalty + congestion penalty)` |
+| `Episode` | một lần đặt hết các macro của một thiết kế |
+| `Policy output` | file `.plc` chứa kết quả placement |
+
+### Các format chính cần nhớ
+
+| Format | Do tool nào tạo ra | Dùng để làm gì |
+|---|---|---|
+| `.v`, `.sv` | RTL gốc hoặc `yosys` | mô tả logic thiết kế |
+| `.lib` | PDK / standard-cell lib | timing, area, power |
+| `.lef` | tech/cell library | hình học cell, layer, macro |
+| `.sdc` | synthesis / flow | clock và timing constraints |
+| `.odb` | `OpenROAD` | checkpoint nội bộ để mở GUI và chạy tiếp |
+| `.def` | `OpenROAD` | placement/routing exchange format |
+| `.spef` | `OpenROAD` | parasitics sau routing |
+| `netlist.pb.txt` | translator / `MacroPlacement` | input graph/netlist cho `circuit_training` |
+| `.plc` | `circuit_training` | input khởi tạo hoặc output placement của RL |
+
+### Sơ đồ end-to-end
+
+```mermaid
+flowchart TD
+    A0[Chọn benchmark / thiết kế mục tiêu\nvd: gcd, testcase MacroPlacement, RTL mở] --> A1[Dựng môi trường Ubuntu 22.04\ncài OpenROAD, ORFS, oss-cad-suite, Python]
+    A1 --> A2[Clone repo / testcase\nDATN, MacroPlacement, circuit_training, ORFS]
+    A2 --> A3[Kiểm tra toolchain\nopenroad, yosys, python, patch compatibility]
+
+    A3 --> B0[Chuẩn bị đầu vào thiết kế]
+    B0 --> B1[RTL / SystemVerilog\n.v .sv]
+    B0 --> B2[Liberty timing\n.lib]
+    B0 --> B3[LEF / tech LEF / cell LEF\n.lef]
+    B0 --> B4[Constraint timing\n.sdc hoặc config]
+
+    B1 --> C0[RTL verification]
+    C0 --> C1[iverilog / verilator / cocotb]
+    C1 --> C2[Waveform + simulation log\n.vcd / pass-fail]
+    C2 --> C3{RTL đúng chức năng?}
+    C3 -- Không --> B1
+    C3 -- Có --> D0
+
+    D0[Logic synthesis] --> D1[yosys]
+    D1 --> D2[Gate-level netlist\n.v]
+    D1 --> D3[Synthesis constraints / reports\n.sdc / area / timing]
+
+    D2 --> E0[Physical design baseline]
+    D3 --> E0
+    B3 --> E0
+    B4 --> E0
+    E0 --> E1[OpenROAD-flow-scripts / OpenROAD]
+    E1 --> E2[Synth checkpoint\n1_synth.odb + 1_synth.sdc]
+    E1 --> E3[Floorplan checkpoint\n2_floorplan.odb + 2_floorplan.sdc]
+    E1 --> E4[Placement checkpoint\n3_place.odb + 3_place.sdc]
+    E1 --> E5[CTS checkpoint\n4_cts.odb + 4_cts.sdc]
+    E1 --> E6[Global route checkpoint\n5_1_grt.odb + 5_1_grt.sdc]
+    E1 --> E7[Final artifacts\n6_final.odb .def .sdc .v .spef]
+
+    E2 --> F0[Phân tích dữ liệu trung gian]
+    E3 --> F0
+    E4 --> F0
+    E5 --> F0
+    E6 --> F0
+    E7 --> F0
+
+    F0 --> F1[Xác định dữ liệu nào cần cho RL]
+    F1 --> F2[Macro geometry / canvas / pins / nets / clusters]
+    F2 --> F3[Format translation bằng MacroPlacement]
+    F3 --> F4[netlist.pb.txt]
+    F3 --> F5[initial.plc]
+    F3 --> F6[Metadata hỗ trợ\nmapping macro, thứ tự, grid, blockages]
+
+    F4 --> G0[RL environment]
+    F5 --> G0
+    F6 --> G0
+    G0 --> G1[circuit_training / PlacementCost / PPO]
+    G1 --> G2[Observation\nstate, mask, current macro, graph features]
+    G1 --> G3[Action\nchọn grid cell / vị trí macro]
+    G1 --> G4[Reward\nproxy cost: HPWL, density, congestion proxy]
+    G2 --> G5[Huấn luyện qua nhiều episode]
+    G3 --> G5
+    G4 --> G5
+    G5 --> G6[Checkpoint policy]
+    G5 --> G7[Placement result\n.plc]
+    G5 --> G8[TensorBoard / training log]
+
+    G7 --> H0[Đưa kết quả RL quay lại flow EDA]
+    H0 --> H1[Chuyển .plc về placement / floorplan usable]
+    H1 --> H2[MacroPlacement bridge / OpenROAD import path]
+    H2 --> H3[OpenROAD re-evaluation]
+    H3 --> H4[place -> cts -> route -> final]
+    H4 --> H5[QoR thật\nWNS TNS HPWL congestion area routeability]
+
+    H5 --> I0{Kết quả tốt hơn baseline?}
+    I0 -- Không --> I1[Điều chỉnh reward / observation / clustering / grid]
+    I1 --> F3
+    I0 -- Có --> I2[Chốt model / testcase / báo cáo benchmark]
+```
+
+### Các pha chính
+
+1. Pha chuẩn bị
+- dựng máy hoặc Docker image
+- cài `OpenROAD`, `ORFS`, `oss-cad-suite`, Python dependencies
+- vá tương thích giữa ORFS và binary OpenROAD nếu cần
+
+2. Pha xác minh EDA baseline
+- chạy flow chuẩn với một design mẫu như `nangate45/gcd`
+- xác nhận sinh được các checkpoint `.odb`
+- mở GUI chỉ để kiểm tra checkpoint, không dùng GUI để chạy flow dài
+
+3. Pha trích dữ liệu cho RL
+- đọc các artifact từ ORFS/OpenROAD
+- xác định macro, pin, net, canvas, blockage, cluster
+- chuyển sang `netlist.pb.txt` và `initial.plc`
+
+4. Pha huấn luyện RL
+- dùng `circuit_training` hoặc baseline RL khác
+- định nghĩa state, action, reward
+- train policy và sinh kết quả placement `.plc`
+
+5. Pha đánh giá lại bằng EDA
+- import kết quả placement về OpenROAD
+- chạy tiếp placement/cts/route/final
+- so sánh QoR với baseline không RL
+
+6. Pha lặp cải tiến
+- chỉnh reward
+- chỉnh grid/canvas
+- chỉnh clustering
+- đổi testcase
+- đánh giá lại
+
+### Input và output chính theo từng chặng
+
+| Chặng | Công cụ chính | Input | Output |
+|---|---|---|---|
+| Setup môi trường | `apt`, Docker, shell scripts | Ubuntu 22.04, package list | máy/container sẵn sàng |
+| RTL verify | `iverilog`, `verilator`, `cocotb` | `.v`, `.sv`, testbench | log mô phỏng, `.vcd` |
+| Synthesis | `yosys` | RTL, `.lib`, script | gate netlist `.v`, `.sdc` |
+| Physical design baseline | `OpenROAD`, `ORFS` | `.v`, `.sdc`, `.lef`, `.lib`, config | `.odb`, `.def`, `.spef`, routed `.v` |
+| Data conversion | `MacroPlacement` | `.lef`, `.def`, `.odb`, netlist, metadata | `netlist.pb.txt`, `initial.plc` |
+| RL training | `circuit_training` | `netlist.pb.txt`, `initial.plc` | policy checkpoint, `.plc`, TensorBoard log |
+| Re-evaluation | `OpenROAD` | RL `.plc` + EDA design data | QoR thật sau place/cts/route |
+
+### Các checkpoint EDA quan trọng trong OpenROAD
+
+| Stage | File chính | Ý nghĩa |
+|---|---|---|
+| Synthesis | `1_synth.odb` | netlist sau synthesis trong OpenDB |
+| Floorplan | `2_floorplan.odb` | die/core/rows/PDN/pin planning cơ sở |
+| Placement | `3_place.odb` | std-cell placement sau global + detailed place |
+| CTS | `4_cts.odb` | clock tree đã được chèn và repair timing ban đầu |
+| Global route | `5_1_grt.odb` | sau global routing và timing/antenna repair |
+| Final | `6_final.odb` | trạng thái cuối để đánh giá / xem GUI |
+
+### Các format chính trong toàn bộ workflow
+
+| Format | Vai trò |
+|---|---|
+| `.v`, `.sv` | RTL hoặc gate-level netlist |
+| `.lib` | thư viện timing/power |
+| `.lef` | thông tin hình học tech/cell/macro |
+| `.def` | placement và routing exchange format |
+| `.odb` | database nội bộ của OpenROAD, rất tiện cho GUI |
+| `.sdc` | timing constraints |
+| `.spef` | parasitic extraction |
+| `.guide` | global routing guides |
+| `netlist.pb.txt` | protobuf text cho `circuit_training` |
+| `.plc` | placement canvas/solution cho RL |
+
 ## 1. Mục tiêu của dự án
 
 Tài liệu này mô tả đầy đủ phần lý thuyết và hướng dẫn triển khai cho dự án:

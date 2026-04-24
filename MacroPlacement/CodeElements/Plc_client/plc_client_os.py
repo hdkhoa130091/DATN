@@ -145,6 +145,12 @@ class PlacementCost(object):
         f.seek(pos)
         return t_line
 
+    def __quoted_value(self, line: str):
+        parts = line.split('"')
+        if len(parts) >= 3:
+            return parts[1]
+        return None
+
     def __read_protobuf(self):
         """
         private function: Protobuf Netlist Parser
@@ -178,8 +184,10 @@ class PlacementCost(object):
                     line = fp.readline()
                     line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
                     # retrieve node name
-                    if line_item[0] == 'name':
-                        node_name = line_item[1]
+                    if line_item and line_item[0] == 'name':
+                        node_name = self.__quoted_value(line)
+                        if node_name is None and len(line_item) > 1:
+                            node_name = line_item[1]
                         # skip metadata header
                         if node_name == "__metadata__":
                             pass
@@ -193,13 +201,21 @@ class PlacementCost(object):
                     line = fp.readline()
                     line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
                     # retrieve node input
-                    if line_item[0] == 'input':
-                        input_list.append(line_item[1])
+                    if line_item and line_item[0] == 'input':
+                        input_name = self.__quoted_value(line)
+                        if input_name is None and len(line_item) > 1:
+                            input_name = line_item[1]
+                        if input_name is not None:
+                            input_list.append(input_name)
 
-                        while re.findall(r'\w+[^\:\n\\{\}\s"]*', self.__peek(fp))[0] == 'input':
+                        while self.__peek(fp).lstrip().startswith('input:'):
                             line = fp.readline()
                             line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
-                            input_list.append(line_item[1])
+                            input_name = self.__quoted_value(line)
+                            if input_name is None and len(line_item) > 1:
+                                input_name = line_item[1]
+                            if input_name is not None:
+                                input_list.append(input_name)
 
                         line = fp.readline()
                         line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)

@@ -82,6 +82,8 @@ def VisualPlacement(netlist_file, plc_file):
     n_cols = -1
     width  = 0.0
     height = 0.0
+    canvas_width = None
+    canvas_height = None
 
     plc_object_list = []  # store all the plc objects
 
@@ -145,6 +147,22 @@ def VisualPlacement(netlist_file, plc_file):
         elif (len(items) > 2 and items[0] == "#" and items[1] == "Width"):
             canvas_width = float(items[3])
             canvas_height = float(items[6])
+
+    if canvas_width is None or canvas_height is None:
+        placed = [obj for obj in plc_object_list if obj.x != -1 and obj.y != -1]
+        if not placed:
+            raise ValueError("Cannot infer canvas size from plc header or node coordinates.")
+        min_x = min(obj.x - obj.width / 2.0 for obj in placed)
+        min_y = min(obj.y - obj.height / 2.0 for obj in placed)
+        max_x = max(obj.x + obj.width / 2.0 for obj in placed)
+        max_y = max(obj.y + obj.height / 2.0 for obj in placed)
+        canvas_width = max_x - min(0.0, min_x)
+        canvas_height = max_y - min(0.0, min_y)
+
+    if n_cols == -1 or n_rows == -1:
+        macro_count = len([obj for obj in plc_object_list if obj.IsHardMacro() or obj.IsSoftMacro()])
+        n_cols = max(1, int(round((macro_count * max(canvas_width / canvas_height, 1e-6)) ** 0.5)))
+        n_rows = max(1, int((macro_count + n_cols - 1) / n_cols))
 
     print("***************************************************")
     print("canvas_width = ", canvas_width)
@@ -225,4 +243,3 @@ if __name__ == "__main__":
     plc_file = args.plc
 
     VisualPlacement(netlist_file, plc_file)
-

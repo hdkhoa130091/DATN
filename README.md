@@ -1,65 +1,56 @@
-# RL for Chip Design - Circuit Training
+# DATN Macro Placement Comparison
 
-Dự án triển khai học tăng cường (Reinforcement Learning) cho thiết kế vi mạch.
+This workspace compares two macro-placement approaches on the same benchmark:
 
-## Cấu trúc thư mục
+- **DREAMPlace**: gradient-based placement baseline.
+- **MaskablePPO**: reinforcement-learning macro placer inspired by AlphaChip-style sequential placement.
 
-```
-DATN/
-├── circuit_training/          # RL Engine (Google Research)
-│   ├── circuit_training/      # Source code
-│   └── ...
-├── MacroPlacement/            # Benchmarks (TILOS Institute)
-│   ├── Testcases/             # Ariane, Mempool, etc.
-│   └── Flows/                 # OpenROAD flows
-├── DREAMPlace/                # GPU Placement Engine
-│   ├── src/                   # C++/CUDA source
-│   └── ...
-├── dreamplace/                # Stub module (đã cài đặt)
-│   └── __init__.py
-├── setup.py                   # Setup dreamplace stub
-├── checkgpu.py                # Kiểm tra GPU
-├── quick_test_training.py     # Test script
-└── COMPLETE_DEPLOYMENT_GUIDE.md  # Hướng dẫn chi tiết
-```
+The vendored `circuit_training/` tree has been removed. The active RL pipeline lives in `rl_macroplacement_agent/` and uses MacroPlacement's open `plc_client_os.py` evaluator for consistent proxy cost, wirelength, density, and congestion metrics.
 
 ## Quick Start
 
-### 1. Kiểm tra môi trường
+Install PPO-side dependencies:
+
 ```bash
-py checkgpu.py
-py quick_test_training.py
+sudo apt-get update
+sudo apt-get install -y python3-pip cmake build-essential git
+python3 -m pip install -r rl_macroplacement_agent/requirements.txt
 ```
 
-### 2. Test import Circuit Training
+Clone, build, and smoke-test official DREAMPlace:
+
 ```bash
-py -c "import sys; sys.path.insert(0, 'circuit_training'); from circuit_training.environment.environment import CircuitEnv; print('SUCCESS')"
+bash rl_macroplacement_agent/scripts/install_dreamplace.sh
 ```
 
-### 3. Xem hướng dẫn chi tiết
-- Mở file `COMPLETE_DEPLOYMENT_GUIDE.md`
-- Đọc từng bước triển khai
-- Chạy training theo hướng dẫn
+Run the PPO smoke/comparison flow:
 
-## Yêu cầu đã cài đặt
+```bash
+PPO_STEPS=1000 MAX_MACROS=5 bash rl_macroplacement_agent/scripts/run_full_comparison.sh
+```
 
-✅ Python 3.10
-✅ TensorFlow 2.15.0
-✅ PyTorch 2.5.1 (CUDA 11.8)
-✅ TF-Agents 0.19.0
-✅ Circuit Training repo
-✅ MacroPlacement repo
-✅ DREAMPlace repo
+For full experiments, raise `PPO_STEPS` to `100000` or more and run DREAMPlace on a matching benchmark config, then convert its `.pl` output to `.plc` with:
 
-## Next Steps
+```bash
+python3 rl_macroplacement_agent/scripts/convert_bookshelf_pl_to_plc.py \
+  --dreamplace_pl path/to/dreamplace_output.pl \
+  --template_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
+  --out rl_macroplacement_agent/results/ariane133_ng45/dreamplace/dreamplace.plc
+```
 
-1. Đọc `COMPLETE_DEPLOYMENT_GUIDE.md`
-2. Chạy `quick_test_training.py` để kiểm tra
-3. Bắt đầu training với PPO
+Then score and compare:
 
-## Tài liệu tham khảo
+```bash
+python3 rl_macroplacement_agent/scripts/eval_proxy.py \
+  --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
+  --plc rl_macroplacement_agent/results/ariane133_ng45/dreamplace/dreamplace.plc \
+  --out rl_macroplacement_agent/results/ariane133_ng45/dreamplace/dreamplace_metrics.json
 
-- Paper: "A graph placement methodology for fast chip design" (Nature 2021)
-- Blog: https://deepmind.google/discover/blog/how-alphachip-transformed-computer-chip-design/
-- Circuit Training: https://github.com/google-research/circuit_training
-- MacroPlacement: https://github.com/TILOS-AI-Institute/MacroPlacement
+python3 rl_macroplacement_agent/scripts/compare_results.py \
+  --result PPO=rl_macroplacement_agent/results/ariane133_ng45/ppo/eval/ppo_eval_summary.json \
+  --result DREAMPlace=rl_macroplacement_agent/results/ariane133_ng45/dreamplace/dreamplace_metrics.json \
+  --out_dir rl_macroplacement_agent/results/ariane133_ng45/comparison
+```
+
+See `rl_macroplacement_agent/README.md` for the detailed pipeline.

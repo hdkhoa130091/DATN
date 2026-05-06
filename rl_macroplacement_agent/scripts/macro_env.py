@@ -10,13 +10,10 @@ from pathlib import Path
 import gymnasium as gym
 import numpy as np
 
+from path_utils import add_repo_paths
 from plc_utils import PlcFile
 
-PLLC_CLIENT_DIR = Path("/home/DATN/MacroPlacement/CodeElements/Plc_client")
-import sys
-
-if str(PLLC_CLIENT_DIR) not in sys.path:
-    sys.path.insert(0, str(PLLC_CLIENT_DIR))
+add_repo_paths()
 
 from plc_client_os import PlacementCost
 

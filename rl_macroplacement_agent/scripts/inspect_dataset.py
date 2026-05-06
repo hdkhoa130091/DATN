@@ -3,13 +3,11 @@
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
+from path_utils import add_repo_paths
 
-PLLC_CLIENT_DIR = Path("/home/DATN/MacroPlacement/CodeElements/Plc_client")
-if str(PLLC_CLIENT_DIR) not in sys.path:
-    sys.path.insert(0, str(PLLC_CLIENT_DIR))
+add_repo_paths()
 
 try:
     from plc_client_os import PlacementCost

@@ -1,19 +1,21 @@
 design: ariane133
 technology: NanGate45
 
-workspace: /home/DATN
-macroplacement_root: /home/DATN/MacroPlacement
-circuit_training_root: /home/DATN/circuit_training
-orfs_root: /home/DATN/OpenROAD-flow-scripts
+workspace: /root/DATN
+macroplacement_root: /root/DATN/MacroPlacement
+orfs_root: /root/DATN/OpenROAD-flow-scripts
+dreamplace_root: /root/DATN/DREAMPlace
 
-benchmark_dir: /home/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping
-netlist: /home/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt
-initial_plc: /home/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc
-legalized_plc: /home/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/legalized.plc
+benchmark_dir: /root/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping
+netlist: /root/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt
+initial_plc: /root/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc
+legalized_plc: /root/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/legalized.plc
 
-output_dir: /home/DATN/rl_macroplacement_agent/results/ppo/ariane133_ng45
-proxy_result_dir: /home/DATN/rl_macroplacement_agent/results/proxy/ariane133_ng45
-openroad_result_dir: /home/DATN/rl_macroplacement_agent/results/openroad/ariane133_ng45
+output_dir: /root/DATN/rl_macroplacement_agent/results/ppo/ariane133_ng45
+proxy_result_dir: /root/DATN/rl_macroplacement_agent/results/proxy/ariane133_ng45
+dreamplace_result_dir: /root/DATN/rl_macroplacement_agent/results/dreamplace/ariane133_ng45
+comparison_result_dir: /root/DATN/rl_macroplacement_agent/results/comparison/ariane133_ng45
+openroad_result_dir: /root/DATN/rl_macroplacement_agent/results/openroad/ariane133_ng45
 
 reward:
   use_get_cost: true

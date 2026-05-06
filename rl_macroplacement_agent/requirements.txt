@@ -1,0 +1,6 @@
+numpy<2
+PyYAML
+gymnasium>=0.29,<1.1
+torch>=2.1,<2.5
+stable-baselines3>=2.3,<2.4
+sb3-contrib>=2.3,<2.4

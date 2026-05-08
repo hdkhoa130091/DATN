@@ -1,5 +1,139 @@
 # RL Macro Placement Project - Progress Summary
 
+## 2026-05-08 - AlphaChip-Like Graph Observation Extractor
+
+### Goal
+
+This step starts the planned improvement after the initial PyTorch
+AlphaChip-like model and PPO agent prototype.
+
+The main problem in the first running RL code was that the environment only
+returned an 8-value observation vector. That observation is too weak for macro
+placement because it does not expose the circuit graph, macro connectivity,
+node types, port clusters, or action masks in the same style as
+`circuit_training`.
+
+This update adds an AlphaChip-like observation extraction layer.
+
+### Code Added
+
+Added:
+
+- `rl_macroplacement_agent/scripts/alphachip_like_features.py`
+- `rl_macroplacement_agent/scripts/inspect_alphachip_like_features.py`
+
+`alphachip_like_features.py` builds model-ready graph observations from
+`plc_client_os.PlacementCost`:
+
+- 12-value netlist metadata vector
+- macro/soft-macro/port-cluster node features
+- sparse adjacency arrays `sparse_adj_i`, `sparse_adj_j`, `sparse_adj_weight`
+- edge-count vector
+- current-node feature index
+- padded grid action mask
+
+The observation keys are intentionally close to public `circuit_training`
+concepts:
+
+```text
+metadata
+node_features
+sparse_adj_i
+sparse_adj_j
+sparse_adj_weight
+edge_counts
+netlist_index
+current_node
+mask
+```
+
+`inspect_alphachip_like_features.py` is a smoke-test script that:
+
+- restores a `.plc` placement
+- creates the AlphaChip-like graph observation
+- reports tensor shapes
+- optionally runs a forward pass through `AlphaChipLikeActorCritic`
+
+### Smoke Test
+
+Command:
+
+```bash
+DATA=/home/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping
+/home/DATN/rl_env/bin/python rl_macroplacement_agent/scripts/inspect_alphachip_like_features.py \
+  --netlist $DATA/netlist.pb.txt \
+  --init_plc $DATA/initial.plc \
+  --max_nodes 2048 \
+  --max_edges 20000 \
+  --max_grid 32 \
+  --run_model \
+  --out rl_macroplacement_agent/results/ariane133_ng45/alphachip_like_model_smoke.json
+```
+
+Observed result:
+
+```text
+feature_nodes: 929
+macro_nodes: 915
+hard_macros: 133
+soft_macros: 782
+port_clusters: 14
+nonzero_edges: 9576
+grid: 24 x 21
+selected_node: 495
+selected_node_valid_actions: 24
+```
+
+Observation shapes:
+
+```text
+metadata:          [12]
+node_features:     [2048, 8]
+sparse_adj_i:      [20000]
+sparse_adj_j:      [20000]
+sparse_adj_weight: [20000]
+edge_counts:       [2048]
+current_node:      [1]
+mask:              [1024]
+```
+
+Model forward smoke test:
+
+```text
+logits_shape: [1, 1024]
+value_shape:  [1]
+argmax_action: 347
+```
+
+Interpretation:
+
+- the project now has a richer AlphaChip-like graph observation path
+- the observation can feed the PyTorch `AlphaChipLikeActorCritic`
+- this is not full training yet, but it removes the biggest architectural gap:
+  the model can now receive graph/connectivity features instead of only 8 scalar
+  values
+
+### Next Improvement
+
+The next step is to integrate this observation extractor into a custom training
+loop:
+
+```text
+AlphaChipLikeFeatureExtractor
+  -> AlphaChipLikeActorCritic
+  -> AlphaChipLikePPOAgent
+  -> placement actions
+  -> PlacementCost reward
+```
+
+After that, compare:
+
+```text
+Stable-Baselines3 MaskablePPO baseline
+vs
+custom PyTorch AlphaChip-like PPO
+```
+
 ## 2026-05-08 - PyTorch RL AlphaChip-Like Prototype
 
 ### Goal

@@ -259,6 +259,9 @@ class AlphaChipLikeFeatureExtractor:
         if node_idx not in self.macro_to_feature_index:
             raise KeyError(f"Node is not in macro feature list: {node_idx}")
         obs = {key: np.copy(value) for key, value in self.static_obs.items()}
+        # Locations and placement flags change after every action, so refresh
+        # node features while reusing the expensive static graph tensors.
+        obs["node_features"] = self._extract_node_features()
         obs["current_node"] = np.asarray(
             [self.macro_to_feature_index[node_idx]], dtype=np.int64
         )

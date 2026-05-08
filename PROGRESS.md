@@ -1,5 +1,106 @@
 # RL Macro Placement Project - Progress Summary
 
+## 2026-05-08 - Custom PyTorch AlphaChip-Like PPO Smoke Test
+
+### Goal
+
+This step connects the newly added graph observation extractor to the explicit
+PyTorch model and PPO agent.
+
+The flow now has a first custom end-to-end AlphaChip-like training path:
+
+```text
+PlacementCost
+  -> AlphaChipLikeFeatureExtractor
+  -> AlphaChipLikeActorCritic
+  -> AlphaChipLikePPOAgent
+  -> placement action
+  -> terminal proxy reward
+  -> PPO update
+```
+
+This is still a smoke-test trainer, not a distributed AlphaChip reproduction.
+Its purpose is to make the local `model + agent + training loop` visible and
+explainable.
+
+### Code Added
+
+Added:
+
+- `rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py`
+
+The script implements:
+
+- model initialization with configurable graph sizes
+- one-episode rollout collection
+- padded AlphaChip-like grid action conversion back to real MacroPlacement grid
+- action-mask based sampling through `AlphaChipLikeActorCritic`
+- terminal reward based on proxy-cost improvement
+- GAE/return computation through `AlphaChipLikePPOAgent`
+- one PPO update per collected episode
+- model checkpoint and CSV/JSON training logs
+
+### Smoke Test
+
+Command:
+
+```bash
+DATA=/home/DATN/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping
+/home/DATN/rl_env/bin/python rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py \
+  --netlist $DATA/netlist.pb.txt \
+  --init_plc $DATA/initial.plc \
+  --out_dir rl_macroplacement_agent/results/ariane133_ng45/alphachip_like_ppo_smoke \
+  --episodes 1 \
+  --max_macros 2 \
+  --max_nodes 1024 \
+  --max_edges 12000 \
+  --max_grid 32 \
+  --device cpu
+```
+
+Observed result:
+
+```text
+episodes: 1
+max_macros: 2
+initial_cost: 0.04972213503402197
+final_cost:   0.052089277825661785
+episode_reward: -2.367142677307129
+invalid_action: none
+loss: 3.2872743606567383
+value_loss: 6.636768817901611
+entropy: 3.1110033988952637
+```
+
+Output artifacts:
+
+```text
+rl_macroplacement_agent/results/ariane133_ng45/alphachip_like_ppo_smoke/alphachip_like_actor_critic.pt
+rl_macroplacement_agent/results/ariane133_ng45/alphachip_like_ppo_smoke/alphachip_like_training_history.csv
+rl_macroplacement_agent/results/ariane133_ng45/alphachip_like_ppo_smoke/alphachip_like_train_summary.json
+```
+
+Interpretation:
+
+- the custom PyTorch AlphaChip-like PPO path runs end-to-end
+- graph observations feed the model
+- the model samples valid masked placement actions
+- `PlacementCost` computes a terminal proxy reward
+- the PPO agent performs an optimizer update
+- the placement quality did not improve in this tiny smoke test, which is
+  expected because it only used one episode and two macros
+
+### Next Improvement
+
+The next technical step is to make this trainer useful beyond smoke testing:
+
+1. cache static graph tensors to avoid rebuilding them every episode
+2. train with more episodes and more macros
+3. save the best custom-PPO `.plc`
+4. compare custom PyTorch PPO against the existing Stable-Baselines3
+   MaskablePPO baseline
+5. add optional DREAMPlace/OpenROAD evaluation after macro placement
+
 ## 2026-05-08 - AlphaChip-Like Graph Observation Extractor
 
 ### Goal

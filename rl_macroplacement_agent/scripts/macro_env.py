@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import csv
 import json
+from types import MethodType
 from pathlib import Path
 
 import gymnasium as gym
@@ -53,6 +54,7 @@ class MacroPlacementEnv(gym.Env):
             ifValidate=False,
             ifReadComment=True,
         )
+        self._install_fast_wirelength_cache()
 
         self.canvas_width, self.canvas_height = self.evaluator.get_canvas_width_height()
         self.grid_cols, self.grid_rows = self.evaluator.get_grid_num_columns_rows()
@@ -138,6 +140,61 @@ class MacroPlacementEnv(gym.Env):
         self.evaluator.FLAG_UPDATE_MACRO_ADJ = True
         self.evaluator.FLAG_UPDATE_MACRO_AND_CLUSTERED_PORT_ADJ = True
         self.evaluator.FLAG_UPDATE_NODE_MASK = True
+
+    def _install_fast_wirelength_cache(self) -> None:
+        """Replace repeated pin-parent lookups with a static net cache.
+
+        The upstream open-source PlacementCost implementation resolves every
+        macro pin's parent node by name each time wirelength is computed. That
+        relation is static for a netlist, so rebuilding it on every RL step is
+        avoidable and dominates runtime on ariane133.
+        """
+        modules = self.evaluator.modules_w_pins
+        name_to_idx = self.evaluator.mod_name_to_indices
+
+        pin_refs: dict[int, tuple[int, float, float]] = {}
+        for pin_idx in set(
+            self.evaluator.port_indices
+            + self.evaluator.soft_macro_pin_indices
+            + self.evaluator.hard_macro_pin_indices
+        ):
+            pin = modules[pin_idx]
+            if pin.get_type() == "PORT":
+                pin_refs[pin_idx] = (pin_idx, 0.0, 0.0)
+            else:
+                ref_idx = name_to_idx[pin.get_macro_name()]
+                off_x, off_y = pin.get_offset()
+                pin_refs[pin_idx] = (ref_idx, off_x, off_y)
+
+        net_terms = []
+        for driver_name, sink_names in self.evaluator.nets.items():
+            driver_idx = name_to_idx[driver_name]
+            pin_indices = [driver_idx, *(name_to_idx[name] for name in sink_names)]
+            net_terms.append((modules[driver_idx].get_weight(), tuple(pin_indices)))
+
+        def fast_get_wirelength(evaluator) -> float:
+            total_hpwl = 0.0
+            modules_local = evaluator.modules_w_pins
+            pin_refs_local = evaluator._fast_pin_refs
+            for weight, pin_indices in evaluator._fast_net_terms:
+                first_ref, first_off_x, first_off_y = pin_refs_local[pin_indices[0]]
+                min_x = max_x = modules_local[first_ref].get_pos()[0] + first_off_x
+                min_y = max_y = modules_local[first_ref].get_pos()[1] + first_off_y
+                for pin_idx in pin_indices[1:]:
+                    ref_idx, off_x, off_y = pin_refs_local[pin_idx]
+                    ref_x, ref_y = modules_local[ref_idx].get_pos()
+                    x = ref_x + off_x
+                    y = ref_y + off_y
+                    min_x = min(min_x, x)
+                    max_x = max(max_x, x)
+                    min_y = min(min_y, y)
+                    max_y = max(max_y, y)
+                total_hpwl += weight * ((max_x - min_x) + (max_y - min_y))
+            return total_hpwl
+
+        self.evaluator._fast_pin_refs = pin_refs
+        self.evaluator._fast_net_terms = tuple(net_terms)
+        self.evaluator.get_wirelength = MethodType(fast_get_wirelength, self.evaluator)
 
     def _grid_cell_to_center(self, action: int) -> tuple[int, int, float, float]:
         row = action // self.grid_cols
@@ -246,7 +303,6 @@ class MacroPlacementEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        self.evaluator = PlacementCost(self.netlist)
         self.evaluator.restore_placement(
             self.init_plc,
             ifInital=True,

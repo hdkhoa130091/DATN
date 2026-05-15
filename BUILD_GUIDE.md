@@ -154,7 +154,7 @@ pip install torch torchvision
 pip install numpy==1.24.3
 
 # RL Libraries
-pip install gymnasium stable-baselines3
+pip install absl-py pandas gymnasium stable-baselines3 sb3-contrib
 
 # Additional dependencies
 pip install matplotlib scipy pyunpack patool

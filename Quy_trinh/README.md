@@ -25,6 +25,9 @@ plc_client_os / PlacementCost
 Gymnasium + Stable-Baselines3 + MaskablePPO
     -> RL loop open-source thay phần AlphaChip RL infra
 
+DREAMPlace
+    -> baseline gradient-based để đối chiếu với RL
+
 best_rl.plc
     -> convert sang OpenROAD Tcl
     -> đưa lại vào OpenROAD để refine và đánh giá QoR
@@ -36,6 +39,7 @@ best_rl.plc
 - `Innovus` -> `OpenROAD` và `OpenROAD-flow-scripts`
 - `plc_wrapper_main` -> `plc_client_os`
 - AlphaChip RL infrastructure -> `Gymnasium`, `stable-baselines3`, `sb3-contrib`
+- baseline đối chứng placement -> `DREAMPlace`
 
 ## Các mốc chính
 
@@ -44,7 +48,7 @@ best_rl.plc
 - [MILESTONE_2.md](/home/DATN/Quy_trinh/MILESTONE_2.md)
   chuẩn hóa dữ liệu macro placement cho RL
 - [MILESTONE_3.md](/home/DATN/Quy_trinh/MILESTONE_3.md)
-  xây RL loop open-source thay thế AlphaChip
+  xây RL loop open-source thay thế AlphaChip và dựng baseline DREAMPlace để so sánh
 - [MILESTONE_4.md](/home/DATN/Quy_trinh/MILESTONE_4.md)
   đưa placement quay lại OpenROAD để đánh giá vật lý
 
@@ -61,6 +65,7 @@ Hướng 1 là:
 - dùng dataset `MacroPlacement`
 - dùng `PlacementCost` làm proxy cost
 - dùng PPO/MaskablePPO để học tăng cường
+- dùng DREAMPlace làm baseline placement để đối chiếu với agent RL
 - dùng OpenROAD để kiểm chứng giá trị vật lý của placement đầu ra
 
 ## Điểm khởi đầu nên dùng
@@ -82,3 +87,16 @@ Project code mới:
 Nếu cần xem bản mô tả chi tiết flow thay thế, đọc:
 
 - [AGENT_RL_MACROPLACEMENT_OPEN_SOURCE_FLOW.md](/home/DATN/AGENT_RL_MACROPLACEMENT_OPEN_SOURCE_FLOW.md)
+
+## Ghi chú về DREAMPlace
+
+DREAMPlace đã có hướng dẫn cài/build chi tiết trong [BUILD_GUIDE.md](/home/DATN/BUILD_GUIDE.md). Trong lộ trình `Quy_trinh`, DREAMPlace không thay flow RL chính mà đóng vai trò **baseline so sánh** ở milestone 3:
+
+```text
+DREAMPlace output `.pl`
+    -> convert về `.plc`
+    -> chấm bằng cùng `PlacementCost`
+    -> so sánh công bằng với PPO / AlphaChip-like PPO
+```
+
+Nếu chỉ chạy benchmark chính thức như `adaptec1`, kết quả đó chứng minh DREAMPlace build/run được. Muốn so sánh trực tiếp với agent RL trên `ariane133`, cần tạo config DREAMPlace cho cùng thiết kế rồi convert đầu ra về `.plc`.

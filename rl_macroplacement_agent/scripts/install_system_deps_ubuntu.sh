@@ -15,8 +15,16 @@ fi
 ${SUDO} "${APT}" update
 ${SUDO} "${APT}" install -y \
   build-essential \
+  bison \
   cmake \
+  flex \
   git \
+  libboost-all-dev \
+  libeigen3-dev \
+  libcairo2 \
   python3-dev \
   python3-pip \
-  python3-venv
+  python3-venv \
+  tcl \
+  tcl-dev \
+  zlib1g-dev

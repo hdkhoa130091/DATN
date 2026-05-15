@@ -184,9 +184,9 @@ source rl_env/bin/activate
 apt-get update
 apt-get install -y \
   git cmake build-essential bison flex libboost-all-dev \
-  python3-dev python3-pip libeigen3-dev zlib1g-dev libcairo2
+  tcl tcl-dev python3-dev python3-pip libeigen3-dev zlib1g-dev libcairo2
 
-pip install shapely cairocffi torch-optimizer ncg-optimizer
+pip install shapely cairocffi torch-optimizer ncg-optimizer scipy matplotlib pyunpack patool
 ```
 
 These packages fix the runtime errors seen after build:
@@ -194,6 +194,8 @@ These packages fix the runtime errors seen after build:
 - `shapely` for fence-region geometry
 - `cairocffi` and `libcairo2` for drawing support
 - `torch-optimizer` and `ncg-optimizer` for optimizer imports
+- `scipy` and `matplotlib` for DREAMPlace runtime imports
+- `pyunpack` and `patool` for benchmark download/extraction scripts
 
 ### 2. Clone And Build DREAMPlace
 
@@ -211,10 +213,22 @@ Build:
 cd /home/DATN/DREAMPlace
 source /home/DATN/rl_env/bin/activate
 
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX=/home/DATN/DREAMPlace/install \
+  -DPython_EXECUTABLE=/home/DATN/rl_env/bin/python
 cmake --build build -j4
 cmake --install build --prefix /home/DATN/DREAMPlace/install
 ```
+
+On the verified GPU machine, `nvcc` came from `/usr/local/cuda-12.4` while
+PyTorch was `2.4.1+cu121`. CUDA 12.x CUB headers fail with upstream DREAMPlace
+because DREAMPlace wraps CUB under `DreamPlace::cub` while also defining its own
+`DreamPlace::cuda` namespace. The repo script
+`rl_macroplacement_agent/scripts/install_dreamplace.sh` applies a small
+compatibility patch to `utils_cub.cuh`: CUDA 12+ uses global `::cub` and aliases
+it back into the DREAMPlace namespace, avoiding the `cuda::std` namespace
+collision that otherwise appears under `cub/device/dispatch/tuning/*`.
 
 Important: run DREAMPlace from the installed tree, not directly from the source
 tree. The source-tree run can fail with:

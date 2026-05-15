@@ -9,6 +9,7 @@ OpenROAD / ORFS / Yosys
 + MacroPlacement dataset
 + plc_client_os / PlacementCost
 + Gymnasium + Stable-Baselines3
++ DREAMPlace baseline
 + OpenROAD evaluation
 ```
 
@@ -17,6 +18,7 @@ Mục tiêu của toàn chương:
 - dựng nền EDA open-source thay cho flow thương mại
 - chuẩn hóa dữ liệu macro placement theo format `circuit_training`
 - xây RL loop open-source thay cho phần RL/cost engine không public của AlphaChip
+- dựng DREAMPlace như baseline gradient-based để đối chiếu với kết quả RL
 - đưa placement sinh ra quay lại OpenROAD để refine và đánh giá vật lý
 
 ## Milestone 1 - Dựng nền EDA open-source
@@ -67,7 +69,8 @@ Mục tiêu:
 - không chạy AlphaChip full
 - dùng `plc_client_os` làm proxy evaluator
 - dùng `Gymnasium + SB3 + MaskablePPO`
-- sinh placement tốt nhất dạng `.plc`
+- cài/build/chạy được DREAMPlace baseline
+- sinh placement tốt nhất dạng `.plc` và có đường so sánh với baseline
 
 Đầu ra chính:
 
@@ -75,6 +78,8 @@ Mục tiêu:
 - `best_rl.plc`
 - `best_proxy.json`
 - `maskable_ppo_model.zip`
+- `dreamplace_run_summary.json`
+- `dreamplace_metrics.json` khi đã convert đầu ra DREAMPlace cùng benchmark về `.plc`
 
 ## Milestone 4 - Đưa placement quay lại OpenROAD
 

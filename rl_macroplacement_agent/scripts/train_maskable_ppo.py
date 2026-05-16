@@ -25,7 +25,7 @@ class ProgressCallback(BaseCallback):
         if self.n_calls % 50 != 0:
             return True
 
-        env = self.training_env.envs[0]
+        env = self.training_env.envs[0].unwrapped
         payload = {
             "timesteps": self.num_timesteps,
             "best_cost": getattr(env, "best_cost", None),

@@ -1,5 +1,180 @@
 # RL Macro Placement Project - Progress Summary
 
+## 2026-05-16 - Researching MacroPlacement Evaluation Protocol
+
+### Goal
+
+Before running a large batch of experiments, study how the upstream
+`TILOS-AI-Institute/MacroPlacement` project evaluates macro placement methods
+and use that protocol to decide what tables should be produced for this thesis.
+
+### What Was Learned From MacroPlacement
+
+The upstream project uses two complementary levels of evaluation:
+
+1. **Proxy-placement metrics**
+   - wirelength cost
+   - density cost
+   - congestion cost
+   - weighted proxy cost
+2. **Post-P&R chip metrics**
+   - core area
+   - standard-cell area
+   - macro area
+   - total power
+   - routed wirelength
+   - WNS
+   - TNS
+   - congestion
+
+The second group is extracted at three physical-design stages:
+
+```text
+preCTS -> postCTS -> postRoute
+```
+
+using `MacroPlacement/Flows/util/extract_report.tcl`. The corresponding CSV
+files are stored under `MacroPlacement/ExperimentalData/`.
+
+Important methodological lesson:
+
+```text
+Do not evaluate RL only by reward or proxy cost.
+Proxy metrics are useful for training, but final claims should also use
+post-P&R chip metrics whenever the flow is available.
+```
+
+### How This Applies To Our RL Work
+
+For the current open-source RL stage, the first table should be a
+**training/evaluation table** over repeated runs:
+
+| testcase | steps | moved macros | seed count | best proxy cost | eval proxy cost | runtime |
+|---|---:|---:|---:|---:|---:|---:|
+
+Recommended aggregation:
+
+- one row per `(testcase, steps, moved_macros)`
+- run at least three seeds
+- report `mean ± std`
+- keep all raw runs in CSV/JSON so every summary number is traceable
+
+Later, after placements are fed back into OpenROAD or a full P&R flow, add a
+second table closer to MacroPlacement's style:
+
+| testcase | method | stage | wirelength | power | WNS | TNS | congestion |
+|---|---|---|---:|---:|---:|---:|---:|
+
+This separates:
+
+- **what the RL agent optimized**
+- **what the final chip implementation achieved**
+
+### Code Added For Future Runs
+
+Added:
+
+- `rl_macroplacement_agent/scripts/run_maskable_ppo_matrix.py`
+- `rl_macroplacement_agent/scripts/run_manual_ppo_run.sh`
+
+This script is kept as a reusable experiment launcher, but no generated result
+files are retained in the repository state. It can execute a matrix over:
+
+- training steps
+- number of moved macros
+- random seeds
+
+and write:
+
+- `matrix_runs.csv`
+- `matrix_runs.json`
+- `matrix_summary.csv`
+- `matrix_summary.json`
+- `matrix_summary.md`
+
+`run_manual_ppo_run.sh` is the preferred launcher when experiments are being
+recorded one run at a time for a thesis table. It uses absolute paths, so it can
+be invoked from any current working directory, and it performs the complete
+per-run sequence:
+
+```text
+train -> deterministic eval -> .plc to Tcl -> CSV row -> Markdown table
+```
+
+### Small Cleanup
+
+Updated `train_maskable_ppo.py` to read callback attributes from
+`env.unwrapped`, removing Gymnasium deprecation warnings in future runs.
+
+Temporary auto-run result folders created during exploration were removed so the
+next experiment batch can be run manually and recorded intentionally.
+
+### OpenROAD Visualization Findings
+
+Two important integration issues were identified while preparing GUI viewing:
+
+1. Running ORFS macro floorplanning for the copied `ariane133` design currently
+   stops at `2_2_floorplan_macro` with `MPL-0002`. This does not block RL runs.
+2. The ORFS-synthesized `ariane133` checkpoint is not the right visualization
+   base for RL placements from the MacroPlacement dataset:
+   - ORFS checkpoint observed: 44 macros
+   - RL dataset placement: 133 hard macros
+
+For RL placement visualization, the correct base is instead:
+
+```text
+MacroPlacement/Flows/NanGate45/ariane133/def/Util_51/ariane133_fp_placed_macros.def
+```
+
+with the NanGate45 LEFs loaded directly in OpenROAD. The DEF-loaded database
+uses escaped bracket names such as `macro_mem\\[0\\]`, so
+`plc_to_openroad_tcl.py` now supports `--escape_brackets`. The installed
+OpenROAD build also does not accept `place_macro -exact`, so manual-run Tcl is
+generated without `-exact`.
+
+Each manual run now generates:
+
+```text
+openroad/view_best_rl.tcl
+openroad/view_ppo_final.tcl
+```
+
+These files can be sourced directly inside `openroad -gui` to load the correct
+LEFs, matching DEF, and the run-specific placement.
+
+### First Manual Run Recorded
+
+The first verified one-by-one run was executed with:
+
+```text
+testcase: NanGate45 / ariane133
+steps:    1000
+macros:   5
+seed:     1
+```
+
+Result:
+
+| run | train best cost | deterministic eval cost | eval wirelength |
+|---|---:|---:|---:|
+| run_001_steps1000_macros5_seed1 | 0.0497221350 | 0.0537140795 | 3477668.7797 |
+
+The run directory is:
+
+```text
+rl_macroplacement_agent/results/manual_runs/NanGate45/ariane133/run_001_steps1000_macros5_seed1/
+```
+
+### Next Research Step
+
+1. Reproduce a small table on one testcase first, following the repeated-run
+   protocol above.
+2. Extend from `ariane133` to additional available MacroPlacement benchmarks
+   such as `ariane136`, `mempool_tile`, and `nvdla`.
+3. Decide whether the report should emphasize:
+   - only RL learning behavior at the current stage, or
+   - the full `RL -> .plc -> OpenROAD/P&R` quality comparison.
+
 ## 2026-05-08 - Custom PyTorch AlphaChip-Like PPO Smoke Test
 
 ### Goal

@@ -51,9 +51,16 @@ def format_place_inst(entry: dict) -> str:
     )
 
 
-def format_place_macro(entry: dict, exact: bool) -> str:
+def openroad_name(name: str, escape_brackets: bool) -> str:
+    if not escape_brackets:
+        return name
+    return name.replace("[", r"\[").replace("]", r"\]")
+
+
+def format_place_macro(entry: dict, exact: bool, escape_brackets: bool) -> str:
+    inst_name = openroad_name(entry["inst_name"], escape_brackets)
     cmd = (
-        f'place_macro -macro_name {{{entry["inst_name"]}}} '
+        f'place_macro -macro_name {{{inst_name}}} '
         f'-location {{{entry["x"]} {entry["y"]}}} '
         f'-orientation {entry["orientation"]}'
     )
@@ -62,7 +69,13 @@ def format_place_macro(entry: dict, exact: bool) -> str:
     return cmd
 
 
-def convert_file(in_path: Path, out_path: Path, mode: str, exact: bool) -> int:
+def convert_file(
+    in_path: Path,
+    out_path: Path,
+    mode: str,
+    exact: bool,
+    escape_brackets: bool,
+) -> int:
     converted = 0
     out_lines = [
         "# Auto-generated from placeInstance Tcl\n",
@@ -77,7 +90,7 @@ def convert_file(in_path: Path, out_path: Path, mode: str, exact: bool) -> int:
             continue
 
         if mode == "place_macro":
-            out_lines.append(format_place_macro(parsed, exact) + "\n")
+            out_lines.append(format_place_macro(parsed, exact, escape_brackets) + "\n")
         else:
             out_lines.append(format_place_inst(parsed) + "\n")
         converted += 1
@@ -102,11 +115,22 @@ def main() -> int:
         action="store_true",
         help="When using place_macro, append -exact",
     )
+    parser.add_argument(
+        "--escape_brackets",
+        action="store_true",
+        help="Escape [ and ] in instance names for DEF-loaded OpenROAD databases.",
+    )
     args = parser.parse_args()
 
     in_path = Path(args.in_tcl)
     out_path = Path(args.out_tcl)
-    converted = convert_file(in_path, out_path, args.mode, args.exact)
+    converted = convert_file(
+        in_path,
+        out_path,
+        args.mode,
+        args.exact,
+        args.escape_brackets,
+    )
     print(f"Converted {converted} placement commands to {out_path}")
     return 0
 

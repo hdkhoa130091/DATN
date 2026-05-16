@@ -408,6 +408,86 @@ After that, compare:
 Stable-Baselines3 MaskablePPO baseline
 vs
 custom PyTorch AlphaChip-like PPO
+
+## 2026-05-16 - AlphaChip-Like Manual-Run Workflow Added
+
+The experimental workflow has now been upgraded so the graph-based
+`AlphaChipLikePPO` path can be run beside the existing `MaskablePPO` baseline
+instead of living only as a smoke-test trainer.
+
+### What changed
+
+- Removed generated Python cache files under `rl_macroplacement_agent/scripts/__pycache__`.
+- Added `evaluate_alphachip_like_policy.py` to run deterministic evaluation,
+  save `alphachip_like_final.plc`, and report proxy metrics.
+- Added `run_manual_alphachip_like_run.sh` so AlphaChip-like runs follow the
+  same manual-run folder structure as MaskablePPO.
+- Added `render_manual_run_table.py` and migrated the shared CSV schema so one
+  table can hold both agents:
+  - `agent`
+  - `episodes`
+  - `train_runtime_sec`
+  - `eval_runtime_sec`
+- Added training-runtime capture to both training paths.
+- Reduced AlphaChip-like default padding for `ariane133` from `2048/20000`
+  nodes/edges to `1024/10000`; the testcase currently needs 929 feature nodes
+  and 9576 nonzero edges, so the smaller default still fits while wasting less
+  compute.
+
+### New command
+
+```bash
+bash rl_macroplacement_agent/scripts/run_manual_alphachip_like_run.sh \
+  NanGate45 ariane133 ac001 205 5 1
+```
+
+This creates:
+
+```text
+results/manual_runs/NanGate45/ariane133/
+  run_ac001_alphachip_like_episodes205_macros5_seed1/
+    train/
+    eval/
+    openroad/
+  tables/run_table.csv
+  tables/run_table.md
+```
+
+### Smoke-test result
+
+The first AlphaChip-like workflow smoke test succeeded:
+
+```text
+run_id:             run_acsmoke_alphachip_like_episodes1_macros5_seed1
+agent:              AlphaChipLikePPO
+train best cost:    0.0544698176
+eval cost:          0.0543939595
+wirelength:         3521686.9829
+train runtime:      46.91 s
+eval runtime:       32.51 s
+```
+
+The output `.plc` and OpenROAD Tcl files were created correctly.
+
+### Current interpretation
+
+The workflow is now ready for **direct comparison** against MaskablePPO, but the
+AlphaChip-like implementation is not yet efficient enough for a large sweep:
+
+- one 5-macro episode is already much slower than MaskablePPO evaluation
+- the graph policy still recomputes rich dynamic features repeatedly
+- the custom trainer updates from very small batches, so quality is not yet
+  expected to beat the baseline
+
+Therefore the next technical task should be:
+
+```text
+optimize graph-observation refresh and batching
+before launching many AlphaChip-like runs
+```
+
+This preserves the research direction while avoiding an expensive but
+misleading large experiment.
 ```
 
 ## 2026-05-08 - PyTorch RL AlphaChip-Like Prototype

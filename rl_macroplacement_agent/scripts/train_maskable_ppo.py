@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 from sb3_contrib import MaskablePPO
@@ -70,7 +71,9 @@ def main() -> int:
     )
 
     callback = ProgressCallback(out_dir)
+    train_start = time.perf_counter()
     model.learn(total_timesteps=args.steps, callback=callback)
+    train_runtime = time.perf_counter() - train_start
     model_path = out_dir / "maskable_ppo_model"
     model.save(str(model_path))
 
@@ -84,6 +87,7 @@ def main() -> int:
         "max_macros": args.max_macros,
         "n_steps": args.n_steps,
         "batch_size": args.batch_size,
+        "train_runtime_sec": train_runtime,
     }
     (out_dir / "train_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))

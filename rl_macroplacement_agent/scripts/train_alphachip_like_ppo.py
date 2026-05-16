@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -229,8 +230,8 @@ def main() -> int:
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--episodes", type=int, default=2)
     parser.add_argument("--max_macros", type=int, default=5)
-    parser.add_argument("--max_nodes", type=int, default=2048)
-    parser.add_argument("--max_edges", type=int, default=20000)
+    parser.add_argument("--max_nodes", type=int, default=1024)
+    parser.add_argument("--max_edges", type=int, default=10000)
     parser.add_argument("--max_grid", type=int, default=32)
     parser.add_argument("--reward_scale", type=float, default=1000.0)
     parser.add_argument("--seed", type=int, default=42)
@@ -275,6 +276,7 @@ def main() -> int:
         writer = csv.DictWriter(handle, fieldnames=history_fields)
         writer.writeheader()
 
+    train_start = time.perf_counter()
     best_cost = float("inf")
     last_summary = {}
     for episode in range(args.episodes):
@@ -312,6 +314,7 @@ def main() -> int:
                 }
             )
 
+    train_runtime = time.perf_counter() - train_start
     model_path = out_dir / "alphachip_like_actor_critic.pt"
     torch.save(agent.model.state_dict(), model_path)
     train_summary = {
@@ -325,6 +328,7 @@ def main() -> int:
         "device": str(device),
         "best_cost": best_cost,
         "last_episode": last_summary,
+        "train_runtime_sec": train_runtime,
     }
     (out_dir / "alphachip_like_train_summary.json").write_text(
         json.dumps(train_summary, indent=2),

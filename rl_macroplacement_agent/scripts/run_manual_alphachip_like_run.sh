@@ -7,7 +7,7 @@ PYTHON_BIN="${PYTHON_BIN:-${ROOT_DIR}/rl_env/bin/python}"
 usage() {
   cat <<'EOF'
 Usage:
-  run_manual_alphachip_like_run.sh PLATFORM TESTCASE RUN_NUMBER EPISODES MACROS SEED
+  run_manual_alphachip_like_run.sh PLATFORM TESTCASE RUN_NUMBER EPISODES MACROS SEED [RESUME_FROM]
 
 Example:
   bash rl_macroplacement_agent/scripts/run_manual_alphachip_like_run.sh \
@@ -15,7 +15,7 @@ Example:
 EOF
 }
 
-if [[ $# -ne 6 ]]; then
+if [[ $# -lt 6 || $# -gt 7 ]]; then
   usage
   exit 2
 fi
@@ -26,6 +26,7 @@ RUN_NUMBER="$3"
 EPISODES="$4"
 MACROS="$5"
 SEED="$6"
+RESUME_FROM="${7:-}"
 STEPS=$((EPISODES * MACROS))
 RUN_ID="run_${RUN_NUMBER}_alphachip_like_episodes${EPISODES}_macros${MACROS}_seed${SEED}"
 
@@ -45,17 +46,24 @@ steps=${STEPS}
 episodes=${EPISODES}
 macros=${MACROS}
 seed=${SEED}
+resume_from=${RESUME_FROM}
 data_dir=${DATA_DIR}
 EOF
 
 echo "[1/5] Training ${RUN_ID}"
-"${PYTHON_BIN}" "${ROOT_DIR}/rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py" \
+TRAIN_ARGS=(
   --netlist "${DATA_DIR}/netlist.pb.txt" \
   --init_plc "${DATA_DIR}/initial.plc" \
   --out_dir "${RUN_DIR}/train" \
   --episodes "${EPISODES}" \
   --max_macros "${MACROS}" \
   --seed "${SEED}"
+)
+if [[ -n "${RESUME_FROM}" ]]; then
+  TRAIN_ARGS+=(--resume_from "${RESUME_FROM}")
+fi
+"${PYTHON_BIN}" "${ROOT_DIR}/rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py" \
+  "${TRAIN_ARGS[@]}"
 
 echo "[2/5] Evaluating ${RUN_ID}"
 "${PYTHON_BIN}" "${ROOT_DIR}/rl_macroplacement_agent/scripts/evaluate_alphachip_like_policy.py" \

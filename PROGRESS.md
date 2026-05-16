@@ -567,6 +567,160 @@ The AlphaChip-like branch is now fast enough to begin meaningful direct
 comparison against MaskablePPO. It is still architecturally more expensive than
 the baseline, but the previous runtime gap was mostly avoidable implementation
 overhead rather than an inherent cost of graph RL.
+
+## 2026-05-16 - Curriculum Performance Pipeline and Full 133-Macro Study
+
+After confirming that runtime alone is not the research target, the study moved
+from a speed-oriented workflow to a **performance-oriented curriculum pipeline**.
+The goal is now to measure whether staged training improves placement quality
+relative to direct training from scratch at the same final difficulty.
+
+### New performance workflow
+
+Added:
+
+- checkpoint resume support in `train_alphachip_like_ppo.py`
+  - `--resume_from`
+  - `--stage_name`
+- `run_alphachip_like_curriculum.sh`
+  - trains a staged path such as `5 -> 10 -> 20 -> 40 -> 80 -> 133`
+  - also trains a scratch baseline at the final macro count
+- `render_curriculum_table.py`
+  - reports:
+    - `eval_cost`
+    - `wirelength`
+    - `% improvement_vs_initial`
+    - train runtime
+- optional resume support in `run_manual_alphachip_like_run.sh`
+
+The key experimental comparison is now:
+
+```text
+curriculum final-stage model
+vs
+scratch model trained directly at the same final macro count
+```
+
+### Early curriculum findings
+
+Small studies on `ariane133` showed:
+
+- at `10` macros, curriculum had only a weak advantage over scratch on average
+- at `20` macros, curriculum again showed a small average advantage but not a
+  decisive margin
+- therefore the study continued to the full `133`-macro problem before making a
+  stronger conclusion
+
+### Full curriculum experiment
+
+Three seeds were run with:
+
+```text
+episodes per stage: 128
+curriculum: 5 -> 10 -> 20 -> 40 -> 80 -> 133
+final scratch baseline: 133
+seeds: 1, 2, 3
+```
+
+Measured full-run time for one seed to `133` macros was about:
+
+```text
+22 minutes total training time
+```
+
+### Table: Curriculum scalability on `ariane133`
+
+| Number of macros | Mean eval cost | Std eval cost | Mean wirelength |
+|---:|---:|---:|---:|
+| 5 | 0.053821 | 0.001027 | 3,484,592.74 |
+| 10 | 0.057682 | 0.000576 | 3,734,600.15 |
+| 20 | 0.061401 | 0.000146 | 3,975,349.53 |
+| 40 | 0.061859 | 0.000501 | 4,005,028.59 |
+| 80 | 0.061784 | 0.000581 | 4,000,155.18 |
+| 133 | 0.061090 | 0.000054 | 3,955,192.28 |
+
+### Table: Curriculum vs scratch at full `133` macros
+
+| Training strategy | Mean eval cost | Std eval cost | Mean wirelength |
+|---|---:|---:|---:|
+| Scratch training at 133 macros | 0.062282 | 0.000999 | 4,032,402.37 |
+| Curriculum training `5->10->20->40->80->133` | 0.061090 | 0.000054 | 3,955,192.28 |
+
+### Per-seed comparison at `133` macros
+
+| Seed | Scratch eval cost | Curriculum eval cost | Curriculum improvement |
+|---:|---:|---:|---:|
+| 1 | 0.062499 | 0.061150 | 2.16% |
+| 2 | 0.063155 | 0.061045 | 3.34% |
+| 3 | 0.061193 | 0.061074 | 0.19% |
+
+### Current interpretation
+
+At the full `133`-macro difficulty, curriculum learning outperformed direct
+scratch training for all three seeds:
+
+```text
+mean eval cost:
+  scratch:    0.062282
+  curriculum: 0.061090
+
+mean improvement of curriculum over scratch:
+  about 1.91%
+```
+
+Curriculum also reduced result variance substantially:
+
+```text
+scratch std:    0.000999
+curriculum std: 0.000054
+```
+
+This supports the research claim that staged curriculum training improves both
+placement quality and stability relative to direct training from scratch on the
+full macro-placement task.
+
+### Important metric caveat
+
+The current metric files contain:
+
+- valid `cost`
+- valid `wirelength`
+- valid `density_cost`
+- invalid `congestion_cost`
+
+The current `congestion_cost` call still returns:
+
+```text
+IndexError('list index out of range')
+```
+
+Therefore, current report tables should only use:
+
+- `cost`
+- `wirelength`
+- `density_cost` only with caution, because it remained effectively constant
+  across these runs
+
+`congestion_cost` should be fixed before claiming a complete multi-objective
+placement comparison.
+
+### Current research conclusion
+
+The project has now demonstrated:
+
+1. an AlphaChip-like graph PPO path that runs end-to-end
+2. a practical curriculum training pipeline with checkpoint transfer
+3. successful scaling to the complete `ariane133` testcase
+4. measurable curriculum benefit over scratch training at `133` macros
+
+The next performance-focused phase should no longer spend most effort on larger
+sweeps. The higher-value work is now:
+
+1. fix congestion evaluation
+2. improve reward shaping
+3. investigate local-refinement formulations that do not destroy the strong
+   initial placement
+4. add best-of-k evaluation and report success rate versus `initial.plc`
 ```
 
 ## 2026-05-08 - PyTorch RL AlphaChip-Like Prototype

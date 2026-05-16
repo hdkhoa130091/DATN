@@ -266,6 +266,8 @@ def main() -> int:
     parser.add_argument("--max_grid", type=int, default=32)
     parser.add_argument("--reward_scale", type=float, default=1000.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--resume_from", help="Optional actor-critic checkpoint to continue from.")
+    parser.add_argument("--stage_name", default="")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -282,6 +284,10 @@ def main() -> int:
             max_grid_size=args.max_grid,
         )
     )
+    if args.resume_from:
+        model.load_state_dict(
+            torch.load(args.resume_from, map_location=device, weights_only=True)
+        )
     agent = AlphaChipLikePPOAgent(
         model=model,
         config=PPOConfig(
@@ -395,6 +401,8 @@ def main() -> int:
         "max_edges": args.max_edges,
         "max_grid": args.max_grid,
         "device": str(device),
+        "resume_from": args.resume_from,
+        "stage_name": args.stage_name,
         "best_cost": best_cost,
         "last_episode": last_summary,
         "train_runtime_sec": train_runtime,

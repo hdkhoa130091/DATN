@@ -28,6 +28,7 @@ from alphachip_like_features import (
 )
 from alphachip_like_model import AlphaChipLikeActorCritic, AlphaChipLikeModelConfig
 from path_utils import add_repo_paths
+from placement_cost_optimizations import install_fast_wirelength_cache
 
 add_repo_paths()
 
@@ -67,6 +68,23 @@ def stack_obs(observations: list[dict[str, np.ndarray]], device: torch.device) -
     }
 
 
+def concat_rollout_batches(batches: list[RolloutBatch]) -> RolloutBatch:
+    """Concatenate complete episodes into one PPO update batch."""
+    return RolloutBatch(
+        obs={
+            key: torch.cat([batch.obs[key] for batch in batches], dim=0)
+            for key in batches[0].obs
+        },
+        actions=torch.cat([batch.actions for batch in batches], dim=0),
+        old_log_probs=torch.cat([batch.old_log_probs for batch in batches], dim=0),
+        rewards=torch.cat([batch.rewards for batch in batches], dim=0),
+        dones=torch.cat([batch.dones for batch in batches], dim=0),
+        values=torch.cat([batch.values for batch in batches], dim=0),
+        returns=torch.cat([batch.returns for batch in batches], dim=0),
+        advantages=torch.cat([batch.advantages for batch in batches], dim=0),
+    )
+
+
 def padded_to_real_action(action: int, grid_cols: int, grid_rows: int, max_grid: int) -> int | None:
     top = (max_grid - grid_rows) // 2
     left = (max_grid - grid_cols) // 2
@@ -92,6 +110,7 @@ def create_plc(netlist: str, init_plc: str) -> PlacementCost:
         ifValidate=False,
         ifReadComment=True,
     )
+    install_fast_wirelength_cache(plc)
     return plc
 
 
@@ -107,16 +126,27 @@ def collect_episode(
     max_macros: int,
     reward_scale: float,
     deterministic: bool = False,
+    plc: PlacementCost | None = None,
+    extractor: AlphaChipLikeFeatureExtractor | None = None,
 ) -> tuple[RolloutBatch, dict, list[dict], str | None]:
-    plc = create_plc(netlist, init_plc)
-    extractor = AlphaChipLikeFeatureExtractor(
-        plc,
-        AlphaChipLikeObservationConfig(
-            max_num_nodes=max_nodes,
-            max_num_edges=max_edges,
-            max_grid_size=max_grid,
-        ),
-    )
+    if plc is None:
+        plc = create_plc(netlist, init_plc)
+    else:
+        plc.restore_placement(
+            init_plc,
+            ifInital=True,
+            ifValidate=False,
+            ifReadComment=True,
+        )
+    if extractor is None:
+        extractor = AlphaChipLikeFeatureExtractor(
+            plc,
+            AlphaChipLikeObservationConfig(
+                max_num_nodes=max_nodes,
+                max_num_edges=max_edges,
+                max_grid_size=max_grid,
+            ),
+        )
     macros = extractor.movable_hard_macros(max_macros=max_macros)
     if not macros:
         raise RuntimeError("No movable hard macros found.")
@@ -229,6 +259,7 @@ def main() -> int:
     parser.add_argument("--init_plc", required=True)
     parser.add_argument("--out_dir", required=True)
     parser.add_argument("--episodes", type=int, default=2)
+    parser.add_argument("--rollout_episodes", type=int, default=8)
     parser.add_argument("--max_macros", type=int, default=5)
     parser.add_argument("--max_nodes", type=int, default=1024)
     parser.add_argument("--max_edges", type=int, default=10000)
@@ -253,7 +284,11 @@ def main() -> int:
     )
     agent = AlphaChipLikePPOAgent(
         model=model,
-        config=PPOConfig(gamma=1.0, learning_rate=3.0e-4, batch_size=args.max_macros),
+        config=PPOConfig(
+            gamma=1.0,
+            learning_rate=3.0e-4,
+            batch_size=max(args.max_macros, args.max_macros * args.rollout_episodes),
+        ),
         device=device,
     )
 
@@ -279,6 +314,25 @@ def main() -> int:
     train_start = time.perf_counter()
     best_cost = float("inf")
     last_summary = {}
+    rollout_plc = create_plc(args.netlist, args.init_plc)
+    rollout_extractor = AlphaChipLikeFeatureExtractor(
+        rollout_plc,
+        AlphaChipLikeObservationConfig(
+            max_num_nodes=args.max_nodes,
+            max_num_edges=args.max_edges,
+            max_grid_size=args.max_grid,
+        ),
+    )
+    pending_batches: list[RolloutBatch] = []
+    pending_rows: list[tuple[int, dict]] = []
+    last_metrics = {
+        "loss": "",
+        "policy_loss": "",
+        "value_loss": "",
+        "entropy": "",
+        "approx_kl": "",
+        "clip_fraction": "",
+    }
     for episode in range(args.episodes):
         batch, summary, _step_rows, _ = collect_episode(
             model=agent.model,
@@ -290,29 +344,43 @@ def main() -> int:
             max_grid=args.max_grid,
             max_macros=args.max_macros,
             reward_scale=args.reward_scale,
+            plc=rollout_plc,
+            extractor=rollout_extractor,
         )
         returns, advantages = agent.compute_returns_and_advantages(
             batch.rewards, batch.dones, batch.values
         )
         batch.returns = returns
         batch.advantages = advantages
-        metrics = agent.update(batch)
+        pending_batches.append(batch)
+        pending_rows.append((episode, summary))
         best_cost = min(best_cost, float(summary["final_cost"]))
-        last_summary = {**summary, **metrics}
+        should_update = (
+            len(pending_batches) >= args.rollout_episodes
+            or episode == args.episodes - 1
+        )
+        if not should_update:
+            continue
 
-        with history_path.open("a", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=history_fields)
-            writer.writerow(
-                {
-                    "episode": episode,
-                    "initial_cost": summary["initial_cost"],
-                    "final_cost": summary["final_cost"],
-                    "episode_reward": summary["episode_reward"],
-                    "steps": summary["steps"],
-                    "invalid_action": summary["invalid_action"],
-                    **metrics,
-                }
-            )
+        metrics = agent.update(concat_rollout_batches(pending_batches))
+        last_metrics = metrics
+        for pending_episode, pending_summary in pending_rows:
+            with history_path.open("a", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=history_fields)
+                writer.writerow(
+                    {
+                        "episode": pending_episode,
+                        "initial_cost": pending_summary["initial_cost"],
+                        "final_cost": pending_summary["final_cost"],
+                        "episode_reward": pending_summary["episode_reward"],
+                        "steps": pending_summary["steps"],
+                        "invalid_action": pending_summary["invalid_action"],
+                        **metrics,
+                    }
+                )
+        last_summary = {**pending_rows[-1][1], **metrics}
+        pending_batches.clear()
+        pending_rows.clear()
 
     train_runtime = time.perf_counter() - train_start
     model_path = out_dir / "alphachip_like_actor_critic.pt"
@@ -321,6 +389,7 @@ def main() -> int:
         "model_path": str(model_path),
         "history_csv": str(history_path),
         "episodes": args.episodes,
+        "rollout_episodes": args.rollout_episodes,
         "max_macros": args.max_macros,
         "max_nodes": args.max_nodes,
         "max_edges": args.max_edges,

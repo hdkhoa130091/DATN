@@ -82,6 +82,12 @@ class AlphaChipLikeFeatureExtractor:
             )
 
         self.static_obs = self._extract_static_obs()
+        self._grid_x = (
+            np.arange(self.grid_cols, dtype=np.float32) + 0.5
+        ) * self.grid_width
+        self._grid_y = (
+            np.arange(self.grid_rows, dtype=np.float32) + 0.5
+        ) * self.grid_height
 
     def _safe_bool_call(self, fn, node_idx: int) -> bool:
         try:
@@ -237,8 +243,34 @@ class AlphaChipLikeFeatureExtractor:
 
     def padded_mask_for_node(self, node_idx: int) -> np.ndarray:
         """Return a 128x128-style padded grid mask for a real macro node."""
-        real_mask = np.asarray(self.plc.get_node_mask(node_idx), dtype=np.int64)
-        real_mask = real_mask.reshape(self.grid_rows, self.grid_cols)
+        mod_w, mod_h = self.plc.get_node_width_height(node_idx)
+        candidate_lx = self._grid_x[None, :] - mod_w / 2.0
+        candidate_ux = self._grid_x[None, :] + mod_w / 2.0
+        candidate_ly = self._grid_y[:, None] - mod_h / 2.0
+        candidate_uy = self._grid_y[:, None] + mod_h / 2.0
+        real_mask = (
+            (candidate_lx >= 0.0)
+            & (candidate_ux <= self.canvas_width)
+            & (candidate_ly >= 0.0)
+            & (candidate_uy <= self.canvas_height)
+        )
+
+        for placed_idx in self.plc.placed_macro:
+            if placed_idx == node_idx or not self.plc.is_node_placed(placed_idx):
+                continue
+            px, py = self.plc.get_node_location(placed_idx)
+            pw, ph = self.plc.get_node_width_height(placed_idx)
+            placed_lx = px - pw / 2.0
+            placed_ux = px + pw / 2.0
+            placed_ly = py - ph / 2.0
+            placed_uy = py + ph / 2.0
+            overlaps = ~(
+                (candidate_ux <= placed_lx)
+                | (placed_ux <= candidate_lx)
+                | (candidate_uy <= placed_ly)
+                | (placed_uy <= candidate_ly)
+            )
+            real_mask &= ~overlaps
 
         rows_pad = self.config.max_grid_size - self.grid_rows
         cols_pad = self.config.max_grid_size - self.grid_cols
@@ -247,7 +279,7 @@ class AlphaChipLikeFeatureExtractor:
         left = cols_pad // 2
         right = cols_pad - left
         padded = np.pad(
-            real_mask,
+            real_mask.astype(np.int64),
             ((top, bottom), (left, right)),
             mode="constant",
             constant_values=0,
@@ -258,7 +290,9 @@ class AlphaChipLikeFeatureExtractor:
         """Return model-ready observation for a macro node id."""
         if node_idx not in self.macro_to_feature_index:
             raise KeyError(f"Node is not in macro feature list: {node_idx}")
-        obs = {key: np.copy(value) for key, value in self.static_obs.items()}
+        # Static graph tensors are immutable for one extractor instance, so keep
+        # references instead of copying large padded arrays every placement step.
+        obs = dict(self.static_obs)
         # Locations and placement flags change after every action, so refresh
         # node features while reusing the expensive static graph tensors.
         obs["node_features"] = self._extract_node_features()

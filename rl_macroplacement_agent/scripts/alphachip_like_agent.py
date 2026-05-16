@@ -138,14 +138,40 @@ class AlphaChipLikePPOAgent:
         }
         return loss, metrics
 
-    def update(self, batch: RolloutBatch) -> dict[str, float]:
-        """Run one optimizer update and return scalar metrics."""
-        self.model.train()
-        loss, metrics = self.ppo_loss(batch)
-        self.optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(
-            self.model.parameters(), self.config.max_grad_norm
+    @staticmethod
+    def _slice_batch(batch: RolloutBatch, indices: torch.Tensor) -> RolloutBatch:
+        return RolloutBatch(
+            obs={key: value[indices] for key, value in batch.obs.items()},
+            actions=batch.actions[indices],
+            old_log_probs=batch.old_log_probs[indices],
+            rewards=batch.rewards[indices],
+            dones=batch.dones[indices],
+            values=batch.values[indices],
+            returns=batch.returns[indices] if batch.returns is not None else None,
+            advantages=(
+                batch.advantages[indices] if batch.advantages is not None else None
+            ),
         )
-        self.optimizer.step()
-        return metrics
+
+    def update(self, batch: RolloutBatch) -> dict[str, float]:
+        """Run PPO epochs over shuffled minibatches and average metrics."""
+        self.model.train()
+        sample_count = batch.actions.shape[0]
+        metric_sums: dict[str, float] = {}
+        updates = 0
+        for _ in range(self.config.epochs):
+            permutation = torch.randperm(sample_count, device=self.device)
+            for start in range(0, sample_count, self.config.batch_size):
+                indices = permutation[start : start + self.config.batch_size]
+                minibatch = self._slice_batch(batch, indices)
+                loss, metrics = self.ppo_loss(minibatch)
+                self.optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.config.max_grad_norm
+                )
+                self.optimizer.step()
+                for key, value in metrics.items():
+                    metric_sums[key] = metric_sums.get(key, 0.0) + value
+                updates += 1
+        return {key: value / max(updates, 1) for key, value in metric_sums.items()}

@@ -488,6 +488,85 @@ before launching many AlphaChip-like runs
 
 This preserves the research direction while avoiding an expensive but
 misleading large experiment.
+
+## 2026-05-16 - AlphaChip-Like Runtime Optimization Before Large Comparison
+
+Before launching a large AlphaChip-like vs MaskablePPO sweep, the
+AlphaChip-like path was profiled and optimized.
+
+### Profile finding
+
+For one CPU-profiled 5-macro episode before optimization:
+
+```text
+total episode time:       57.24 s
+wirelength computation:   39.41 s
+node-mask generation:     10.92 s
+model forward passes:      0.22 s
+```
+
+This showed that the main bottleneck was **not** the GNN itself. Most time was
+spent in repeated proxy-cost plumbing around it.
+
+### Changes made
+
+- Added `placement_cost_optimizations.py` and reused the fast HPWL cache in both
+  MaskablePPO and AlphaChip-like flows.
+- Replaced the slow Python `get_node_mask()` loop in AlphaChip-like observation
+  generation with a vectorized NumPy mask implementation.
+- Verified the new vectorized mask against the original implementation for the
+  first five `ariane133` hard macros:
+
+```text
+all compared masks matched exactly
+```
+
+- Stopped copying immutable static graph tensors for every placement step.
+- Reused one `PlacementCost` object and one graph extractor across AlphaChip-like
+  training episodes, resetting only placement state.
+- Upgraded PPO updating from one tiny episode at a time to batched rollouts:
+  - new `--rollout_episodes`
+  - concatenate complete episodes before PPO update
+  - run shuffled minibatch PPO epochs
+
+### Measured improvement
+
+After optimization, the same CPU-profiled 5-macro episode became:
+
+```text
+total episode time:        7.76 s
+wirelength computation:    0.60 s
+mask generation:           no longer a dominant cost
+```
+
+That is approximately:
+
+```text
+57.24 s -> 7.76 s
+7.4x faster per profiled episode
+```
+
+The manual workflow smoke test also improved substantially:
+
+```text
+before optimization:
+  train runtime: 46.91 s
+  eval runtime:  32.51 s
+
+after optimization:
+  train runtime:  4.65 s
+  eval runtime:   0.74 s
+```
+
+Temporary smoke-test result folders and rows were removed after verification so
+the main experiment table remains clean.
+
+### Current conclusion
+
+The AlphaChip-like branch is now fast enough to begin meaningful direct
+comparison against MaskablePPO. It is still architecturally more expensive than
+the baseline, but the previous runtime gap was mostly avoidable implementation
+overhead rather than an inherent cost of graph RL.
 ```
 
 ## 2026-05-08 - PyTorch RL AlphaChip-Like Prototype

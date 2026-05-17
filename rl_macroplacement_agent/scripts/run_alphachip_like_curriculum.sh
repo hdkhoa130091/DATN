@@ -50,11 +50,38 @@ with p.open('a',newline='') as f:
 PY
 }
 
+create_openroad_artifacts() {
+  local run_dir="$1"
+  mkdir -p "${run_dir}/openroad"
+
+  "${PYTHON_BIN}" "${ROOT_DIR}/MacroPlacement/Flows/util/plc_pb_to_placement_tcl.py" \
+    "${run_dir}/eval/alphachip_like_final.plc" \
+    "${DATA_DIR}/netlist.pb.txt" \
+    "${run_dir}/openroad/alphachip_like_final_raw.tcl"
+
+  "${PYTHON_BIN}" "${ROOT_DIR}/rl_macroplacement_agent/scripts/plc_to_openroad_tcl.py" \
+    --in_tcl "${run_dir}/openroad/alphachip_like_final_raw.tcl" \
+    --out_tcl "${run_dir}/openroad/alphachip_like_final_openroad.tcl" \
+    --mode place_macro \
+    --escape_brackets
+
+  if [[ "${PLATFORM}" == "NanGate45" && "${TESTCASE}" == "ariane133" ]]; then
+    cat >"${run_dir}/openroad/view_alphachip_like_final.tcl" <<EOF
+read_lef ${ROOT_DIR}/OpenROAD-flow-scripts/flow/platforms/nangate45/lef/NangateOpenCellLibrary.tech.lef
+read_lef ${ROOT_DIR}/OpenROAD-flow-scripts/flow/platforms/nangate45/lef/NangateOpenCellLibrary.macro.lef
+read_lef ${ROOT_DIR}/OpenROAD-flow-scripts/flow/platforms/nangate45/lef/fakeram45_256x16.lef
+read_def ${ROOT_DIR}/MacroPlacement/Flows/NanGate45/ariane133/def/Util_51/ariane133_fp_placed_macros.def
+source ${run_dir}/openroad/alphachip_like_final_openroad.tcl
+gui::fit
+EOF
+  fi
+}
+
 run_one() {
   local mode="$1" stage="$2" macros="$3" resume_from="$4"
   local run_id="${EXPERIMENT_ID}_${mode}_stage${stage}_macros${macros}_seed${SEED}"
   local run_dir="${RESULT_ROOT}/${run_id}"
-  mkdir -p "${run_dir}/train" "${run_dir}/eval"
+  mkdir -p "${run_dir}/train" "${run_dir}/eval" "${run_dir}/openroad"
   local train_args=(
     --netlist "${DATA_DIR}/netlist.pb.txt"
     --init_plc "${DATA_DIR}/initial.plc"
@@ -75,6 +102,7 @@ run_one() {
     --out_dir "${run_dir}/eval" \
     --max_macros "${macros}" \
     --deterministic
+  create_openroad_artifacts "${run_dir}"
   append_row "${run_id}" "${mode}" "${stage}" "${macros}" "${EPISODES_PER_STAGE}" "${run_dir}" "${resume_from}"
   printf '%s\n' "${run_dir}/train/alphachip_like_actor_critic.pt"
 }

@@ -387,26 +387,30 @@ Each later stage resumes from the previous checkpoint. A scratch 20-macro run wi
 
 With too little budget per stage, curriculum did not outperform scratch.
 
-### 7.4 Clean longer-budget curriculum: `cur003`
+### 7.4 Clean longer-budget curriculum: repeated seeds
 
-| Method | Episodes/stage | 20-macro eval cost | 20-macro wirelength |
-|---|---:|---:|---:|
-| curriculum | 615 | **0.054444** | **3,524,934** |
-| scratch | 615 | 0.061006 | 3,949,756 |
+| Seed | Method | Episodes/stage | 20-macro eval cost | 20-macro wirelength |
+|---:|---|---:|---:|---:|
+| 1 | curriculum | 615 | **0.054444** | **3,524,934** |
+| 1 | scratch | 615 | 0.061006 | 3,949,756 |
+| 2 | curriculum | 615 | **0.053338** | **3,453,351** |
+| 2 | scratch | 615 | 0.055719 | 3,607,470 |
 
 Relative gain of curriculum over scratch at 20 macros:
 
-```text
-Eval cost improvement     ~= 10.76%
-Wirelength improvement    ~= 10.76%
-```
+| Seed | Eval-cost improvement | Wirelength improvement |
+|---:|---:|---:|
+| 1 | 10.76% | 10.76% |
+| 2 | 4.27% | 4.27% |
 
 Training behavior also supports the conclusion:
 
 | Run | Mean final cost first 20 episodes | Mean final cost last 20 episodes |
 |---|---:|---:|
-| curriculum stage 3, 20 macros | 0.058023 | **0.055221** |
-| scratch 20 macros | 0.059875 | 0.059914 |
+| seed 1 curriculum stage 3, 20 macros | 0.058023 | **0.055221** |
+| seed 1 scratch 20 macros | 0.059875 | 0.059914 |
+| seed 2 curriculum stage 3, 20 macros | 0.054186 | **0.053573** |
+| seed 2 scratch 20 macros | 0.059803 | 0.057343 |
 
 **Current conclusion**
 
@@ -414,7 +418,7 @@ The present evidence supports:
 
 > Curriculum over macro-count difficulty can help the AlphaChip-like graph agent, but only when each stage receives enough training budget.
 
-This conclusion is currently established for `seed = 1`; it still needs repeated-seed confirmation.
+This conclusion has now repeated on `seed = 1` and `seed = 2`; a third seed is still needed before reporting a stable `mean ± std` table.
 
 ## 8. What Is Valid to Claim Now
 
@@ -425,12 +429,12 @@ This conclusion is currently established for `seed = 1`; it still needs repeated
 3. The AlphaChip-like graph path runs end-to-end on the MacroPlacement dataset.
 4. Advantage normalization across the full rollout batch is necessary for meaningful PPO learning in the current trainer.
 5. Correct Circuit Training-style reset semantics require unplacing movable nodes before sequential hard-macro placement.
-6. With a sufficient stage budget, curriculum transfer from `5 -> 10 -> 20` macros can substantially outperform scratch training at 20 macros on `ariane133` seed 1.
+6. With a sufficient stage budget, curriculum transfer from `5 -> 10 -> 20` macros outperformed scratch training at 20 macros on `ariane133` for both seed 1 and seed 2.
 
 ### Claims not yet supported
 
 1. AlphaChip-like is globally better than MLP across all task sizes.
-2. Curriculum is robust across seeds; only the clean long-budget `seed = 1` result exists so far.
+2. Curriculum is robust enough to claim a final multi-seed result; only two clean long-budget seeds exist so far.
 3. The method scales successfully to the full `133` hard macros yet.
 4. Proxy-cost gains already imply final post-route chip-quality gains.
 
@@ -459,15 +463,14 @@ The final thesis should separate:
 
 ### Phase 1: confirm the curriculum effect
 
-1. Repeat the clean long-budget experiment at `seed = 2`:
+1. Repeat the clean long-budget experiment at `seed = 3`:
 
 ```bash
 bash rl_macroplacement_agent/scripts/run_alphachip_like_curriculum.sh \
-  NanGate45 ariane133 cur004 2 615 5,10,20
+  NanGate45 ariane133 cur005 3 615 5,10,20
 ```
 
-2. Repeat at `seed = 3` if seed 2 is consistent.
-3. Report mean ± std for:
+2. Report mean ± std for:
    - curriculum 20-macro final stage,
    - scratch 20-macro control.
 

@@ -70,6 +70,8 @@ def stack_obs(observations: list[dict[str, np.ndarray]], device: torch.device) -
 
 def concat_rollout_batches(batches: list[RolloutBatch]) -> RolloutBatch:
     """Concatenate complete episodes into one PPO update batch."""
+    advantages = torch.cat([batch.advantages for batch in batches], dim=0)
+    advantages = (advantages - advantages.mean()) / (advantages.std() + 1.0e-8)
     return RolloutBatch(
         obs={
             key: torch.cat([batch.obs[key] for batch in batches], dim=0)
@@ -81,7 +83,7 @@ def concat_rollout_batches(batches: list[RolloutBatch]) -> RolloutBatch:
         dones=torch.cat([batch.dones for batch in batches], dim=0),
         values=torch.cat([batch.values for batch in batches], dim=0),
         returns=torch.cat([batch.returns for batch in batches], dim=0),
-        advantages=torch.cat([batch.advantages for batch in batches], dim=0),
+        advantages=advantages,
     )
 
 
@@ -161,11 +163,36 @@ def collect_episode(
     invalid_action = None
 
     initial_cost = float(plc.get_cost())
+    # Match Circuit Training's episode reset semantics: all movable nodes are
+    # unplaced before hard-macro placement begins. Otherwise macros that are due
+    # to be placed later remain at their initial locations and incorrectly block
+    # the action mask, which can make larger episodes infeasible.
+    plc.unplace_all_nodes()
     final_cost = initial_cost
 
     model.eval()
     for step_idx, node_idx in enumerate(macros):
         obs = extractor.observation_for_node(node_idx)
+        if not np.any(obs["mask"]):
+            invalid_action = -1
+            rewards[step_idx] = -4.0
+            dones[step_idx] = 1.0
+            observations.append(obs)
+            actions.append(0)
+            log_probs.append(0.0)
+            values.append(0.0)
+            step_rows.append(
+                {
+                    "step": step_idx + 1,
+                    "node_idx": node_idx,
+                    "padded_action": None,
+                    "real_action": None,
+                    "valid": 0,
+                    "cost": final_cost,
+                    "reward": rewards[step_idx],
+                }
+            )
+            break
         torch_obs = obs_to_torch(obs, device)
         with torch.no_grad():
             action_t, log_prob_t, value_t = model.act(

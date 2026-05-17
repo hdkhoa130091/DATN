@@ -95,7 +95,10 @@ class AlphaChipLikePPOAgent:
             next_value = values[t]
 
         returns = advantages + values
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1.0e-8)
+        # Keep per-episode advantages raw here. The trainer concatenates several
+        # complete placement episodes into one PPO rollout; normalization must
+        # happen across that full rollout so better episodes remain distinguishable
+        # from worse ones during the policy update.
         return returns.detach(), advantages.detach()
 
     def ppo_loss(self, batch: RolloutBatch) -> tuple[torch.Tensor, dict[str, float]]:

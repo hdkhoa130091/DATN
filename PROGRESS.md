@@ -1,5 +1,76 @@
 # RL Macro Placement Project - Progress Summary
 
+## 2026-05-17 - AlphaChip-like Study Consolidated
+
+### Current Research Direction
+
+The project direction is now explicitly:
+
+```text
+RL macro placement toward AlphaChip / Circuit Training
+```
+
+The small `MaskablePPO + MLP` environment is retained as a baseline, while the
+main method is the graph-based AlphaChip-like path in:
+
+```text
+rl_macroplacement_agent/scripts/alphachip_like_features.py
+rl_macroplacement_agent/scripts/alphachip_like_model.py
+rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py
+```
+
+A commit-friendly research summary has been written to:
+
+```text
+RESULTS.md
+```
+
+That document records the experiment purpose, theory, formulas, debugging
+findings, valid/invalid claims, tables, conclusions, and the next path toward a
+MacroPlacement-style final evaluation.
+
+### Main Findings Completed In This Stage
+
+1. The first AlphaChip-like PPO trainer normalized advantages per episode,
+   which suppressed useful cross-episode learning signal. Advantage
+   normalization was moved to the concatenated rollout batch.
+2. The earlier AlphaChip-like environment restored `initial.plc` but did not
+   unplace movable nodes before sequential hard-macro placement. That left 915
+   already-placed macros as artificial obstacles and exhausted the 20-macro mask
+   by about step 17. The trainer and evaluator now call `unplace_all_nodes()` to
+   match Circuit Training-style reset semantics.
+3. After the fixes, all clean 20-macro runs complete the full placement sequence
+   without invalid actions.
+4. A short clean curriculum (`cur002`, 256 episodes/stage) did not beat scratch,
+   but a longer clean curriculum (`cur003`, 615 episodes/stage) did:
+
+| method at 20 macros | eval cost | wirelength |
+|---|---:|---:|
+| curriculum 5 -> 10 -> 20 | 0.0544441094 | 3524933.8925 |
+| scratch 20 | 0.0610056629 | 3949755.6562 |
+
+This is a roughly 10.76% improvement in both eval cost and wirelength for the
+clean long-budget seed-1 comparison.
+
+### Immediate Next Step
+
+Repeat the clean long-budget curriculum with additional seeds before scaling to
+larger macro counts:
+
+```bash
+bash rl_macroplacement_agent/scripts/run_alphachip_like_curriculum.sh \
+  NanGate45 ariane133 cur004 2 615 5,10,20
+```
+
+If repeated seeds confirm the effect, extend the study toward:
+
+```text
+5 -> 10 -> 20 -> 50 -> 100 -> 133 hard macros
+```
+
+and then add OpenROAD / post-P&R evaluation tables closer to the style used in
+`MacroPlacement`.
+
 ## 2026-05-16 - Researching MacroPlacement Evaluation Protocol
 
 ### Goal

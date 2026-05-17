@@ -55,6 +55,9 @@ def main() -> int:
     )
     macros = extractor.movable_hard_macros(max_macros=args.max_macros)
     initial_cost = float(plc.get_cost())
+    # Circuit Training resets placement by unplacing movable nodes before the
+    # hard-macro sequence starts. Keep evaluation aligned with training.
+    plc.unplace_all_nodes()
     final_cost = initial_cost
     invalid_action = None
 
@@ -62,6 +65,9 @@ def main() -> int:
     steps = 0
     for node_idx in macros:
         obs = extractor.observation_for_node(node_idx)
+        if not obs["mask"].any():
+            invalid_action = -1
+            break
         with torch.no_grad():
             action_t, _, _ = model.act(obs_to_torch(obs, device), deterministic=args.deterministic)
         padded_action = int(action_t.item())

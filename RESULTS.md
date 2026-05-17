@@ -75,11 +75,17 @@ So the baseline is an MLP policy with action masking over grid cells. It does **
 
 The baseline uses stepwise proxy-cost improvement:
 
-```text
-r_t = reward_scale * (previous_cost - current_cost)
-```
+$$
+r_t = \alpha \left(C_{t-1} - C_t\right)
+$$
 
-with penalties for invalid actions or non-improving behavior.
+where:
+
+- \(C_{t-1}\) is the previous proxy cost,
+- \(C_t\) is the proxy cost after the current placement action,
+- \(\alpha\) is the reward scaling factor.
+
+Additional penalties are applied for invalid actions or non-improving behavior.
 
 ### 3.4 Baseline results: training budget study at 5 macros
 
@@ -166,36 +172,79 @@ metadata + graph node features + sparse edges
 
 The current AlphaChip-like trainer uses terminal proxy reward:
 
-```text
-R = reward_scale * (initial_cost - final_cost)
-```
+$$
+R = \alpha \left(C_{\mathrm{init}} - C_{\mathrm{final}}\right)
+$$
+
+where \(C_{\mathrm{init}}\) is the proxy cost before the episode, \(C_{\mathrm{final}}\) is the proxy cost after the final hard-macro placement, and \(\alpha\) is the reward scaling factor.
 
 The actor is optimized with the clipped PPO objective:
 
-```text
-L_policy = - E[min(r_t A_t,
-                  clip(r_t, 1 - epsilon, 1 + epsilon) A_t)]
-```
+$$
+\mathcal{L}_{\mathrm{policy}}
+=
+-\mathbb{E}_t
+\left[
+\min
+\left(
+\rho_t A_t,\;
+\operatorname{clip}\!\left(\rho_t, 1-\epsilon, 1+\epsilon\right) A_t
+\right)
+\right]
+$$
 
 where:
 
-```text
-r_t = pi_theta(a_t | s_t) / pi_theta_old(a_t | s_t)
-```
+$$
+\rho_t
+=
+\frac{\pi_{\theta}\!\left(a_t \mid s_t\right)}
+{\pi_{\theta_{\mathrm{old}}}\!\left(a_t \mid s_t\right)}
+$$
 
 The critic uses squared value error, and the total loss is:
 
-```text
-L = L_policy + c_v * L_value - c_e * entropy
-```
+$$
+\mathcal{L}
+=
+\mathcal{L}_{\mathrm{policy}}
++
+c_v \mathcal{L}_{\mathrm{value}}
+-
+c_e \mathcal{H}
+$$
+
+with:
+
+$$
+\mathcal{L}_{\mathrm{value}}
+=
+\mathbb{E}_t \left[\left(G_t - V_{\phi}(s_t)\right)^2\right]
+$$
+
+where \(\mathcal{H}\) is the policy entropy term, \(c_v\) is the value-loss coefficient, \(c_e\) is the entropy coefficient, and \(G_t\) is the return target.
 
 Advantages are computed with generalized advantage estimation (GAE):
 
-```text
-A_t = delta_t + gamma * lambda * (1 - done_t) * A_{t+1}
+$$
+A_t
+=
+\delta_t
++
+\gamma \lambda \left(1-d_t\right) A_{t+1}
+$$
 
-delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)
-```
+$$
+\delta_t
+=
+r_t
++
+\gamma \left(1-d_t\right) V_{\phi}(s_{t+1})
+-
+V_{\phi}(s_t)
+$$
+
+where \(d_t \in \{0,1\}\) is the episode-termination indicator.
 
 ## 5. Important Debugging Findings and Fixes
 

@@ -1,5 +1,349 @@
 # RL Macro Placement Project - Progress Summary
 
+## 2026-05-17 - Handoff Notes For A Fresh GPU Docker / SSH Machine
+
+### Why This Section Exists
+
+The current work was completed inside a prepared GPU environment. If the next
+session starts on a newly rented SSH server or a fresh Docker image, do **not**
+assume that CUDA, Python packages, DREAMPlace, OpenROAD, or benchmark data are
+already present. Rebuild the environment in a controlled order and verify each
+layer before starting long RL experiments.
+
+### Current Research State At Handoff
+
+The research direction remains:
+
+```text
+RL macro placement toward AlphaChip / Circuit Training
+```
+
+The latest reliable conclusions are:
+
+1. The 8-value `MaskablePPO + MLP` environment is a baseline only.
+2. The AlphaChip-like graph path is the main method.
+3. Two correctness bugs have already been fixed and must not be reintroduced:
+   - normalize PPO advantages over the **combined rollout batch**, not each
+     short episode independently;
+   - call `unplace_all_nodes()` before sequential hard-macro placement so the
+     episode reset matches Circuit Training semantics.
+4. Clean long-budget curriculum results currently exist for two seeds:
+
+| seed | method at 20 macros | eval cost | wirelength |
+|---:|---|---:|---:|
+| 1 | curriculum 5 -> 10 -> 20 | 0.0544441094 | 3524933.8925 |
+| 1 | scratch 20 | 0.0610056629 | 3949755.6562 |
+| 2 | curriculum 5 -> 10 -> 20 | 0.0533384836 | 3453351.1676 |
+| 2 | scratch 20 | 0.0557189124 | 3607469.8480 |
+
+This means the curriculum effect has repeated on two seeds, but a third seed is
+still needed before publishing a final `mean ± std` comparison.
+
+### Source-Of-Truth Files To Read First On A New Machine
+
+Open these files before making new changes:
+
+```text
+README.md
+RESULTS.md
+PROGRESS.md
+BUILD_GUIDE.md
+FULL_OPEN_SOURCE_RTL_TO_RL_GUIDE.md
+AGENT_RL_MACROPLACEMENT_OPEN_SOURCE_FLOW.md
+```
+
+Their roles are:
+
+| File | Purpose |
+|---|---|
+| `README.md` | project overview, RL/EDA theory, setup, and basic workflow |
+| `RESULTS.md` | current research findings, formulas, tables, valid claims, next plan |
+| `PROGRESS.md` | dated project history and this handoff checklist |
+| `BUILD_GUIDE.md` | detailed install/build notes, especially DREAMPlace |
+| `FULL_OPEN_SOURCE_RTL_TO_RL_GUIDE.md` | end-to-end EDA-to-RL flow |
+| `AGENT_RL_MACROPLACEMENT_OPEN_SOURCE_FLOW.md` | implementation constraints and architectural intent |
+
+### Recommended Fresh-Machine Rebuild Order
+
+#### 1. Clone the repository and enter it
+
+```bash
+git clone <repo-url> DATN
+cd DATN
+```
+
+If the repo is already cloned, verify the branch and pull the latest commits:
+
+```bash
+git status
+git branch --show-current
+git pull --ff-only
+```
+
+#### 2. Verify GPU / CUDA before building anything heavy
+
+```bash
+nvidia-smi || true
+nvcc --version || true
+python3 --version
+```
+
+Record:
+
+- GPU model,
+- driver version,
+- CUDA toolkit version,
+- Python version.
+
+Do not start DREAMPlace GPU build until `nvcc` is available or until the build
+is intentionally planned as CPU-only.
+
+#### 3. Install system dependencies
+
+```bash
+bash rl_macroplacement_agent/scripts/install_system_deps_ubuntu.sh
+```
+
+If working inside a minimal Docker image, also confirm basic utilities such as
+`git`, `curl`, `wget`, `python3-venv`, and compiler toolchain are usable.
+
+#### 4. Create the Python environment
+
+```bash
+python3 -m venv rl_env
+source rl_env/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r rl_macroplacement_agent/requirements.txt
+```
+
+#### 5. Restore or clone required upstream repositories / assets
+
+The research path currently depends on:
+
+```text
+MacroPlacement
+DREAMPlace
+OpenROAD-flow-scripts
+```
+
+If they are not included in the cloned workspace or mounted into the container,
+restore/clone them before running scripts. Do **not** replace the working
+`MacroPlacement` dataset with the demo file under `MacroPlacement/Flows/util/`.
+Use:
+
+```text
+MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/
+```
+
+and verify that it contains:
+
+```text
+netlist.pb.txt
+initial.plc
+legalized.plc
+```
+
+#### 6. Build DREAMPlace
+
+```bash
+source rl_env/bin/activate
+bash rl_macroplacement_agent/scripts/install_dreamplace.sh
+```
+
+Important DREAMPlace lessons already learned:
+
+- upstream DREAMPlace with CUDA 12.x can fail because of the CUB namespace
+  interaction; the install script applies the required CUDA-12 compatibility
+  patch automatically;
+- run DREAMPlace from the installed tree, not directly from the source tree,
+  because generated Python modules live under the build/install output;
+- if the build fails with only a top-level `gmake Error 2`, inspect the earlier
+  compiler output instead of assuming the last printed target is the root
+  cause.
+
+Optional smoke test:
+
+```bash
+RUN_SMOKE_TEST=1 bash rl_macroplacement_agent/scripts/install_dreamplace.sh
+```
+
+#### 7. Verify OpenROAD / ORFS
+
+The project uses OpenROAD for physical-design verification and visualization.
+Check:
+
+```bash
+openroad -version || true
+```
+
+If ORFS needs to be rebuilt or restored, use the instructions in
+`BUILD_GUIDE.md` and `FULL_OPEN_SOURCE_RTL_TO_RL_GUIDE.md`. A basic sanity flow
+is:
+
+```bash
+cd /home/DATN/OpenROAD-flow-scripts/flow
+QT_QPA_PLATFORM=offscreen \
+make DESIGN_CONFIG=./designs/nangate45/gcd/config.mk \
+  YOSYS_EXE=/home/DATN/oss-cad-suite-20260421/bin/yosys \
+  OPENROAD_EXE=/usr/bin/openroad \
+  synth floorplan place -j1
+```
+
+#### 8. Verify the AlphaChip-like graph path before long runs
+
+```bash
+cd /home/DATN
+source rl_env/bin/activate
+python rl_macroplacement_agent/scripts/inspect_alphachip_like_features.py \
+  --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
+  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --max_macros 5 \
+  --run_model \
+  --out rl_macroplacement_agent/results/alphachip_like_smoke/ariane133_macros5.json
+```
+
+Expected high-level facts for `ariane133`:
+
+```text
+feature_nodes: 929
+hard_macros: 133
+soft_macros: 782
+port_clusters: 14
+nonzero_edges: 9576
+```
+
+### Do-Not-Forget Failure Modes Already Discovered
+
+1. `initial.plc` is not supposed to remain as a full set of obstacles during an
+   AlphaChip-like episode. If 20-macro episodes start losing legal cells around
+   step 17, first verify the `unplace_all_nodes()` reset path.
+2. `get_congestion_cost()` currently may raise:
+
+```text
+IndexError('list index out of range')
+```
+
+   Keep congestion optional until that evaluator path is repaired; proxy cost
+   and wirelength are currently the stable training/evaluation metrics.
+3. A small 5-macro task can make the MLP baseline look deceptively strong. The
+   graph model should be judged on harder settings, not only the smallest task.
+4. `cur001` is a debugging record only. Do not use it for final scientific
+   claims because it was produced before the reset bug was fixed.
+5. `cur002` is clean but short-budget. It shows that too little per-stage budget
+   can make curriculum fail to beat scratch.
+6. `cur003` and the seed-2 continuation are the current clean long-budget
+   evidence supporting curriculum transfer.
+
+### Current Output / Visualization Workflow
+
+For manual AlphaChip-like runs and new curriculum runs, placements can be
+converted for OpenROAD using:
+
+```text
+.plc
+  -> MacroPlacement/Flows/util/plc_pb_to_placement_tcl.py
+  -> raw placeInstance Tcl
+  -> rl_macroplacement_agent/scripts/plc_to_openroad_tcl.py
+  -> OpenROAD Tcl / view Tcl
+```
+
+The curriculum launcher now creates OpenROAD artifacts automatically for future
+runs. Existing clean `cur002` and `cur003` results were also backfilled locally
+with:
+
+```text
+openroad/alphachip_like_final_raw.tcl
+openroad/alphachip_like_final_openroad.tcl
+openroad/view_alphachip_like_final.tcl
+```
+
+### Exact Next Research Steps
+
+#### Phase A - finish the 20-macro repeated-seed study
+
+1. Run the third clean long-budget seed:
+
+```bash
+bash rl_macroplacement_agent/scripts/run_alphachip_like_curriculum.sh \
+  NanGate45 ariane133 cur005 3 615 5,10,20
+```
+
+2. If the script is interrupted before the scratch final stage, run an explicit
+   scratch control with the same macro count, episode budget, and seed.
+3. Produce a final 3-seed table:
+
+```text
+curriculum 20-macro mean ± std
+scratch 20-macro mean ± std
+wirelength mean ± std
+runtime mean ± std
+```
+
+#### Phase B - scale the difficulty
+
+If the 3-seed result remains favorable, extend the main curriculum toward the
+full Ariane problem:
+
+```text
+5 -> 10 -> 20 -> 50 -> 100 -> 133 hard macros
+```
+
+The episode budget must scale deliberately. Do not keep a tiny fixed step budget
+for larger macro counts and then interpret degradation as a failure of the
+method.
+
+#### Phase C - add stronger baselines and ablations
+
+Recommended comparisons:
+
+- MLP baseline vs AlphaChip-like graph model,
+- scratch vs curriculum,
+- short-stage budget vs long-stage budget,
+- possibly alternative curricula or stage schedules,
+- later, same physical testcase across additional designs if time allows.
+
+#### Phase D - complete the MacroPlacement-style evaluation story
+
+Current results are still mainly proxy/training results. To finish the study in
+spirit of `MacroPlacement`, the project still needs:
+
+1. choose representative placements from repeated-seed RL runs,
+2. convert them back into the EDA flow,
+3. run OpenROAD / P&R evaluation stages,
+4. extract physical metrics such as:
+   - routed wirelength,
+   - power,
+   - WNS,
+   - TNS,
+   - congestion,
+5. create a second table separate from the proxy-training table.
+
+The final report should clearly separate:
+
+| Table | Purpose |
+|---|---|
+| RL / proxy table | what the agent optimized and learned |
+| physical implementation table | what the chip-quality flow achieved |
+
+### Suggested First Commands In The Next Session
+
+After rebuilding the environment and verifying dependencies, the first commands
+should be:
+
+```bash
+cd /home/DATN
+source rl_env/bin/activate
+python rl_macroplacement_agent/scripts/inspect_alphachip_like_features.py \
+  --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
+  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --max_macros 5 \
+  --run_model \
+  --out rl_macroplacement_agent/results/alphachip_like_smoke/ariane133_macros5.json
+```
+
+Then continue with the next planned research run rather than repeating already
+completed clean experiments unnecessarily.
+
 ## 2026-05-17 - AlphaChip-like Study Consolidated
 
 ### Current Research Direction

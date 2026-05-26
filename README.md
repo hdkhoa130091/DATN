@@ -87,7 +87,7 @@ với \(C\) là proxy placement cost và \(\alpha\) là hệ số scale reward.
 
 Agent AlphaChip-like dùng PPO. Hàm mục tiêu policy dạng clipped:
 
-$$ \mathcal{L}_{\mathrm{policy}} = -\mathbb{E}_t \left[ \min \left( \rho_t A_t,\; \operatorname{clip}(\rho_t, 1-\epsilon, 1+\epsilon) A_t \right) \right] $$
+$$ \mathcal{L}_{\mathrm{policy}} = -\mathbb{E}_t \left[ \min \left( \rho_t A_t,\; \mathrm{clip}(\rho_t, 1-\epsilon, 1+\epsilon) A_t \right) \right] $$
 
 trong đó:
 

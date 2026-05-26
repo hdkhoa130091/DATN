@@ -87,34 +87,17 @@ với \(C\) là proxy placement cost và \(\alpha\) là hệ số scale reward.
 
 Agent AlphaChip-like dùng PPO. Hàm mục tiêu policy dạng clipped:
 
-$$
-\mathcal{L}_{\mathrm{policy}}
-=
--\mathbb{E}_t
-\left[
-\min
-\left(
-\rho_t A_t,
-\operatorname{clip}(\rho_t, 1-\epsilon, 1+\epsilon) A_t
-\right)
-\right]
-$$
+$$ \mathcal{L}_{\mathrm{policy}} = -\mathbb{E}_t \left[ \min \left( \rho_t A_t,\; \operatorname{clip}(\rho_t, 1-\epsilon, 1+\epsilon) A_t \right) \right] $$
 
 trong đó:
 
-$$
-\rho_t = \frac{\pi_{\theta}(a_t \mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t \mid s_t)}
-$$
+$$ \rho_t = \frac{\pi_{\theta}(a_t \mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t \mid s_t)} $$
 
 Ước lượng advantage dùng GAE:
 
-$$
-A_t = \delta_t + \gamma \lambda (1-d_t) A_{t+1}
-$$
+$$ A_t = \delta_t + \gamma \lambda (1-d_t) A_{t+1} $$
 
-$$
-\delta_t = r_t + \gamma (1-d_t)V_{\phi}(s_{t+1}) - V_{\phi}(s_t)
-$$
+$$ \delta_t = r_t + \gamma (1-d_t)V_{\phi}(s_{t+1}) - V_{\phi}(s_t) $$
 
 ## 3. Quy trình EDA và vị trí của macro placement
 

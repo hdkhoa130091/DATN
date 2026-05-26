@@ -51,11 +51,11 @@ $$
 
 trong đó:
 
-- \(\mathcal{S}\): tập trạng thái,
-- \(\mathcal{A}\): tập hành động,
-- \(P\): động lực chuyển trạng thái,
-- \(R\): hàm thưởng,
-- \(\gamma\): hệ số chiết khấu.
+- `𝓢`: tập trạng thái,
+- `𝓐`: tập hành động,
+- `P`: động lực chuyển trạng thái,
+- `R`: hàm thưởng,
+- `γ`: hệ số chiết khấu.
 
 Trong macro placement:
 
@@ -81,7 +81,7 @@ $$
 R = \alpha \left(C_{\mathrm{init}} - C_{\mathrm{final}}\right)
 $$
 
-với \(C\) là proxy placement cost và \(\alpha\) là hệ số scale reward.
+với `C` là proxy placement cost và `α` là hệ số scale reward.
 
 ### 2.3 PPO
 

@@ -1,0 +1,13 @@
+services:
+  openroad-cli:
+    image: openroad-docker-lab:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openroad-docker-lab-cli
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    command: bash

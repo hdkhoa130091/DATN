@@ -145,12 +145,6 @@ class PlacementCost(object):
         f.seek(pos)
         return t_line
 
-    def __quoted_value(self, line: str):
-        parts = line.split('"')
-        if len(parts) >= 3:
-            return parts[1]
-        return None
-
     def __read_protobuf(self):
         """
         private function: Protobuf Netlist Parser
@@ -184,10 +178,8 @@ class PlacementCost(object):
                     line = fp.readline()
                     line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
                     # retrieve node name
-                    if line_item and line_item[0] == 'name':
-                        node_name = self.__quoted_value(line)
-                        if node_name is None and len(line_item) > 1:
-                            node_name = line_item[1]
+                    if line_item[0] == 'name':
+                        node_name = line_item[1]
                         # skip metadata header
                         if node_name == "__metadata__":
                             pass
@@ -201,21 +193,13 @@ class PlacementCost(object):
                     line = fp.readline()
                     line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
                     # retrieve node input
-                    if line_item and line_item[0] == 'input':
-                        input_name = self.__quoted_value(line)
-                        if input_name is None and len(line_item) > 1:
-                            input_name = line_item[1]
-                        if input_name is not None:
-                            input_list.append(input_name)
+                    if line_item[0] == 'input':
+                        input_list.append(line_item[1])
 
-                        while self.__peek(fp).lstrip().startswith('input:'):
+                        while re.findall(r'\w+[^\:\n\\{\}\s"]*', self.__peek(fp))[0] == 'input':
                             line = fp.readline()
                             line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
-                            input_name = self.__quoted_value(line)
-                            if input_name is None and len(line_item) > 1:
-                                input_name = line_item[1]
-                            if input_name is not None:
-                                input_list.append(input_name)
+                            input_list.append(line_item[1])
 
                         line = fp.readline()
                         line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
@@ -1791,9 +1775,6 @@ class PlacementCost(object):
         mod = None
         try:
             mod = self.modules_w_pins[node_idx]
-            # Allow MACRO_PIN to return 0 size
-            if mod.get_type() == 'MACRO_PIN':
-                return 0.0, 0.0
             assert mod.get_type() in ['MACRO', 'STDCELL', 'PORT']
         except AssertionError:
             print("[ERROR NODE FIXED] Found {}. Only 'MACRO', 'macro', 'STDCELL'".format(mod.get_type())
@@ -1982,9 +1963,6 @@ class PlacementCost(object):
 
         try:
             mod = self.modules_w_pins[node_idx]
-            # Allow MACRO_PIN to return True (fixed by default)
-            if mod.get_type() == 'MACRO_PIN':
-                return True
             assert mod.get_type() in ['MACRO', 'STDCELL', 'PORT']
         except AssertionError:
             print("[ERROR NODE FIXED] Found {}. Only 'MACRO', 'STDCELL'".format(mod.get_type())
@@ -2000,21 +1978,17 @@ class PlacementCost(object):
         """
         Update Node location if node is 'MACRO', 'STDCELL', 'PORT'
         """
-        # First check if node_idx is valid and get module
+        mod = None
+
         try:
             mod = self.modules_w_pins[node_idx]
-        except Exception:
-            print("[ERROR NODE LOCATION] Could not find module by node index")
-            exit(1)
-        
-        # Skip MACRO_PIN silently - they don't need position updates
-        if mod.get_type() == 'MACRO_PIN':
-            return
-        
-        # Check valid types
-        if mod.get_type() not in ['MACRO', 'STDCELL', 'PORT']:
+            assert mod.get_type() in ['MACRO', 'STDCELL', 'PORT']
+        except AssertionError:
             print("[ERROR NODE LOCATION] Found {}. Only 'MACRO', 'macro', 'STDCELL'".format(mod.get_type())
                     +"'PORT' are considered to be placable nodes")
+            exit(1)
+        except Exception:
+            print("[ERROR NODE LOCATION] Could not find module by node index")
             exit(1)
         
         mod.set_pos(x_pos, y_pos)
@@ -2323,9 +2297,6 @@ class PlacementCost(object):
 
         try:
             mod = self.modules_w_pins[node_idx]
-            # Allow MACRO_PIN to return True (placed by default)
-            if mod.get_type() == 'MACRO_PIN':
-                return True
             assert mod.get_type() in ['MACRO', 'macro', 'STDCELL', 'PORT']
         except AssertionError:
             print("[ERROR NODE PLACED] Found {}. Only 'MACRO', 'STDCELL',".format(mod.get_type())
@@ -3342,36 +3313,6 @@ class PlacementCost(object):
 
         def get_type(self):
             return "MACRO_PIN"
-
-    def set_congestion_grid(self, grid_cols: int, grid_rows: int) -> None:
-        """Set congestion grid dimensions."""
-        self.grid_col = grid_cols
-        self.grid_row = grid_rows
-        # Reinitialize congestion maps
-        self.V_routing_cong = [0] * (self.grid_col * self.grid_row)
-        self.H_routing_cong = [0] * (self.grid_col * self.grid_row)
-        self.V_macro_routing_cong = [0] * (self.grid_col * self.grid_row)
-        self.H_macro_routing_cong = [0] * (self.grid_col * self.grid_row)
-        # Reinitialize node mask
-        self.node_mask = np.array([1] * (self.grid_col * self.grid_row))\
-            .reshape(self.grid_row, self.grid_col)
-
-    def set_placement_grid(self, grid_cols: int, grid_rows: int) -> None:
-        """Set placement grid dimensions."""
-        self.grid_col = grid_cols
-        self.grid_row = grid_rows
-
-    def has_area_constraint(self) -> bool:
-        """Check if any area constraint exists."""
-        # Check if any module has fence region (area constraint)
-        for mod in self.modules_w_pins:
-            if hasattr(mod, 'fence_region') and mod.fence_region is not None:
-                return True
-        return False
-
-    def num_nodes(self) -> int:
-        """Return total number of nodes (modules + pins)."""
-        return len(self.modules_w_pins)
 
 def main():
     test_netlist_dir = './Plc_client/test/'+\

@@ -1,8 +1,8 @@
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+ARG BASE_IMAGE=ubuntu:22.04
+FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Ho_Chi_Minh
-ENV ORFS_HOME=/opt/OpenROAD-flow-scripts
 ENV DREAMPLACE_HOME=/opt/DREAMPlace
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
@@ -39,7 +39,7 @@ RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
       liblzma-dev \
       libsqlite3-dev \
       libssl-dev \
-      libboost-all-dev \
+      libboost-dev \
       libeigen3-dev \
       libspdlog-dev \
       libfmt-dev \
@@ -58,7 +58,8 @@ RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
       libxcursor1 \
       libglu1-mesa \
       tzdata \
-      yosys || true
+      yosys && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     python3 -m pip install --no-cache-dir \
@@ -70,22 +71,13 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
       tqdm \
       pyyaml \
       tensorboard \
-      gymnasium \
-      stable-baselines3 \
+      gymnasium && \
+    python3 -m pip install --no-cache-dir \
+      --index-url https://download.pytorch.org/whl/cpu \
       torch \
       torchvision \
-      torchaudio
-
-# OpenROAD:
-# 1. Ưu tiên package apt nếu có.
-# 2. Nếu không có, chỉ clone ORFS source để chuẩn bị, không tự build OpenROAD nặng từ source.
-RUN if apt-cache show openroad >/dev/null 2>&1; then \
-      apt-get update && apt-get install -y --no-install-recommends openroad; \
-    else \
-      echo "openroad package not available via apt on this base image"; \
-    fi
-
-RUN git clone --depth 1 https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git ${ORFS_HOME} || true
+      torchaudio && \
+    python3 -m pip install --no-cache-dir --no-deps stable-baselines3
 
 # DREAMPlace: clone source, không tự build vì còn phụ thuộc tương thích CUDA/PyTorch/GCC/CMake.
 RUN git clone --depth 1 https://github.com/limbo018/DREAMPlace.git ${DREAMPLACE_HOME} || true

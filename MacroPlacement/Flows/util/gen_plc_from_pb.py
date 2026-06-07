@@ -7,7 +7,6 @@ This will generate the 'init.plc' as output
 
 import sys
 import numpy as np
-from math import ceil, sqrt
 
 class pb_object:
   def __init__(self, id):
@@ -89,31 +88,6 @@ for node in node_list:
     soft_macro_list.append(node)
   elif node.pb_type == '"port"' or node.pb_type == '"PORT"':
     port_list.append(node)
-
-placed_nodes = [
-  node for node in node_list
-  if node.x != -1 and node.y != -1
-]
-
-if placed_nodes:
-  min_x = min(float(node.x) - float(node.width) / 2.0 for node in placed_nodes)
-  min_y = min(float(node.y) - float(node.height) / 2.0 for node in placed_nodes)
-  max_x = max(float(node.x) + float(node.width) / 2.0 for node in placed_nodes)
-  max_y = max(float(node.y) + float(node.height) / 2.0 for node in placed_nodes)
-  canvas_width = np.round(max_x - min(0.0, min_x), 3)
-  canvas_height = np.round(max_y - min(0.0, min_y), 3)
-else:
-  canvas_width = 0.0
-  canvas_height = 0.0
-
-placeable_count = max(1, len(hard_macro_list) + len(soft_macro_list))
-aspect_ratio = float(canvas_width) / float(canvas_height) if canvas_height else 1.0
-n_cols = max(1, int(round(sqrt(placeable_count * max(aspect_ratio, 1e-6)))))
-n_rows = max(1, int(ceil(placeable_count / n_cols)))
-
-fp.write(f"# Columns : {n_cols}  Rows : {n_rows}\n")
-fp.write(f"# Width : {canvas_width}  Height : {canvas_height}\n")
-fp.write(f"# node_index x y orientation fixed\n")
 
 area1 = 0
 area2 = 0

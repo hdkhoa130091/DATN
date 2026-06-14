@@ -230,7 +230,21 @@ make DESIGN_CONFIG=designs/nangate45/adder_demo/config.mk \
   FLOW_VARIANT=datn synth
 ```
 
-Thư mục kết quả:
+Mỗi testcase có thư mục kết quả riêng theo công thức:
+
+```text
+openroad_docker_lab/OpenROAD-flow-scripts/flow/
+  results/<platform>/<design>/<flow-variant>/
+```
+
+Trong đó:
+
+- `<platform>` lấy từ biến `PLATFORM` trong `config.mk`, ví dụ `nangate45`.
+- `<design>` thường lấy từ `DESIGN_NICKNAME`, ví dụ `adder_demo`.
+- `<flow-variant>` lấy từ biến môi trường `FLOW_VARIANT`; nếu không đặt thì
+  script sử dụng giá trị mặc định `datn`.
+
+Với lệnh ví dụ phía trên, đường dẫn cụ thể là:
 
 ```text
 openroad_docker_lab/OpenROAD-flow-scripts/flow/
@@ -249,7 +263,7 @@ Log tổng hợp:
 
 ```text
 openroad_docker_lab/OpenROAD-flow-scripts/flow/
-  logs/nangate45/adder_demo/datn/1_2_yosys.log
+  logs/<platform>/<design>/<flow-variant>/1_2_yosys.log
 ```
 
 ## Chạy floorplan
@@ -271,7 +285,7 @@ make ... do-floorplan
 Đầu ra chính:
 
 ```text
-results/nangate45/adder_demo/datn/2_floorplan.odb
+results/<platform>/<design>/<flow-variant>/2_floorplan.odb
 ```
 
 Database này chứa die/core area, placement rows, tracks, vị trí I/O, vị trí
@@ -297,7 +311,7 @@ make ... do-place
 Đầu ra chính:
 
 ```text
-results/nangate45/adder_demo/datn/3_place.odb
+results/<platform>/<design>/<flow-variant>/3_place.odb
 ```
 
 Stage placement gồm global placement, I/O placement, timing-driven resizing và

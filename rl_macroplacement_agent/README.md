@@ -42,6 +42,21 @@ Script này tự dò CUDA. Có GPU/CUDA thì build bản GPU, không có thì bu
 
 ## Train AlphaChip-like PPO
 
+Trên máy GPU, sau khi kích hoạt `rl_env`, có thể dùng script cấu hình sẵn để
+giảm VRAM:
+
+```bash
+source rl_env/bin/activate
+EPISODES=10 ROLLOUT_EPISODES=2 BATCH_SIZE=1 MAX_EDGES=4000 \
+  ./rl_macroplacement_agent/scripts/run_ariane133_ppo.sh
+```
+
+Các biến `EPISODES`, `ROLLOUT_EPISODES`, `BATCH_SIZE`, `MAX_NODES`,
+`MAX_EDGES`, `MAX_GRID`, `MAX_MACROS`, `DEVICE` và `OUT_DIR` đều có thể đổi
+trực tiếp trước lệnh.
+
+Hoặc gọi Python thủ công:
+
 ```bash
 python rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py \
   --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \

@@ -295,6 +295,12 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume_from", help="Optional actor-critic checkpoint to continue from.")
     parser.add_argument("--stage_name", default="")
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=8,
+        help="PPO minibatch size for GPU updates. Smaller values reduce VRAM usage.",
+    )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -320,7 +326,7 @@ def main() -> int:
         config=PPOConfig(
             gamma=1.0,
             learning_rate=3.0e-4,
-            batch_size=max(args.max_macros, args.max_macros * args.rollout_episodes),
+            batch_size=args.batch_size,
         ),
         device=device,
     )
@@ -427,6 +433,7 @@ def main() -> int:
         "max_nodes": args.max_nodes,
         "max_edges": args.max_edges,
         "max_grid": args.max_grid,
+        "batch_size": args.batch_size,
         "device": str(device),
         "resume_from": args.resume_from,
         "stage_name": args.stage_name,

@@ -55,13 +55,39 @@ openroad-docker-lab:latest
 ./scripts/run_cli.sh
 ```
 
-Container sẽ mount thư mục project vào:
+Script giữ lại container `openroad_cli` giữa các lần chạy và mount toàn bộ
+repository DATN vào:
 
 ```text
-/workspace
+/workspace/DATN
 ```
 
-và mở `bash` để bạn tự thao tác.
+Nếu container đã tồn tại, script chỉ khởi động lại rồi mở `bash`, không xóa và
+không build lại image.
+
+## 5.1. Chạy Ariane133 từ synthesis đến placement
+
+Từ thư mục gốc DATN trên máy local:
+
+```bash
+JOBS=1 ./openroad_docker_lab/scripts/run_ariane133_orfs.sh
+```
+
+Flow chạy Yosys synthesis, OpenROAD floorplan và placement. Kết quả chính nằm
+trong:
+
+```text
+openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/ariane133/datn
+```
+
+Các file chính là `1_synth.odb`, `2_floorplan.odb`, `3_place.odb` và
+`3_place.def`.
+
+Huong dan tao va chay mot testcase RTL bat ky:
+
+```text
+openroad_docker_lab/SYNTHESIS_GUIDE.md
+```
 
 ## 6. Cách chạy GUI
 

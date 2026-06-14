@@ -1,118 +1,153 @@
-# Yosys and OpenROAD Synthesis Workflow
+# Quy trình tổng hợp RTL với Yosys và OpenROAD
 
-This guide describes the reusable scripts provided by this repository for
-running RTL synthesis, floorplanning, and placement with the Nangate45
-technology.
+## Giới thiệu
 
-## Workflow Scripts
+Quy trình chuẩn để tạo đầu vào cho bài toán macro placement gồm các giai đoạn:
 
-### `run_cli.sh`
-
-Opens an interactive shell in the persistent `openroad_cli` container:
-
-```bash
-./openroad_docker_lab/scripts/run_cli.sh
+```text
+RTL Verilog (.v) -----------+
+Thư viện Liberty (.lib) ----+--> Yosys + ABC
+Ràng buộc timing (.sdc) ----+        |
+                                     v
+                         Gate-level Verilog (.v)
+                         Database synthesis (.odb)
+                         SDC sau synthesis (.sdc)
+                                     |
+LEF công nghệ và macro (.lef) -------+--> OpenROAD
+                                     |
+                                     v
+                         Floorplan/placement (.odb, .def)
+                                     |
+                                     v
+                         flow.py hoặc run_CodeFlow.sh
+                                     |
+                                     v
+                         netlist.pb.txt + initial.plc
 ```
 
-The repository is mounted at `/workspace/DATN` inside the container. An existing
-container is restarted and reused instead of being recreated.
+Ý nghĩa của từng giai đoạn:
 
-### `run_orfs_design.sh`
+1. **RTL Verilog** mô tả chức năng logic của thiết kế.
+2. **Yosys** đọc RTL, phân cấp thiết kế, chuyển các process thành mạch logic và
+   tối ưu netlist.
+3. **ABC** ánh xạ logic sang các standard cell có trong thư viện Liberty của
+   Nangate45.
+4. **OpenROAD** đọc netlist đã tổng hợp, LEF công nghệ, LEF macro và SDC để tạo
+   floorplan và placement vật lý.
+5. **Code Flow** chuyển dữ liệu vật lý sang đồ thị macro placement, tạo
+   `netlist.pb.txt` và `initial.plc` cho môi trường học tăng cường.
 
-Runs a design described by an OpenROAD-flow-scripts configuration file:
+Một điểm cần phân biệt rõ:
+
+- `.lib` và `.sdc` là đầu vào của tổng hợp và phân tích timing.
+- `.lef` là đầu vào vật lý mô tả kích thước, pin và obstruction của cell/macro.
+- Yosys tạo gate-level netlist `.v`.
+- OpenROAD tạo database `.odb` và có thể xuất placement `.def`.
+- `flow.py` hoặc `run_CodeFlow.sh` mới là bước tạo dữ liệu
+  `netlist.pb.txt` và `initial.plc`.
+
+## Script tổng quát
+
+Script dùng cho mọi thiết kế:
+
+```text
+openroad_docker_lab/scripts/run_orfs_design.sh
+```
+
+Cú pháp:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
-  <design-config.mk> [synth|floorplan|place]
+  <đường-dẫn-config.mk> [synth|floorplan|place]
 ```
 
-Arguments:
-
-- `<design-config.mk>` is relative to
-  `openroad_docker_lab/OpenROAD-flow-scripts/flow/`.
-- `synth` runs Yosys synthesis and creates an OpenROAD database.
-- `floorplan` runs synthesis followed by OpenROAD floorplanning.
-- `place` runs synthesis, floorplanning, and placement.
-- The stage defaults to `synth` when the second argument is omitted.
-
-Optional environment variables:
+Đường dẫn `config.mk` được tính tương đối từ:
 
 ```text
-JOBS             Number of parallel make jobs. Default: 1
-FLOW_VARIANT     Name of the output run. Default: datn
-CONTAINER_NAME   Docker container name. Default: openroad_cli
-IMAGE_NAME       Docker image name. Default: openroad-docker-lab:latest
+openroad_docker_lab/OpenROAD-flow-scripts/flow/
 ```
 
-Example:
+Các stage được hỗ trợ:
+
+| Stage | Công việc được thực hiện | Đầu ra chính |
+|---|---|---|
+| `synth` | Tổng hợp RTL và ánh xạ standard cell | `1_2_yosys.v`, `1_synth.odb`, `1_synth.sdc` |
+| `floorplan` | Chạy synthesis, sau đó tạo floorplan | `2_floorplan.odb` |
+| `place` | Chạy synthesis, floorplan và placement | `3_place.odb` |
+
+Nếu không truyền stage, script mặc định chạy `synth`.
+
+Các biến môi trường có thể cấu hình:
+
+```text
+JOBS             Số tiến trình make chạy song song, mặc định là 1
+FLOW_VARIANT     Tên lần chạy và thư mục kết quả, mặc định là datn
+CONTAINER_NAME   Tên container, mặc định là openroad_cli
+IMAGE_NAME       Tên Docker image, mặc định là openroad-docker-lab:latest
+```
+
+Ví dụ:
 
 ```bash
-JOBS=4 FLOW_VARIANT=experiment_01 \
+JOBS=4 FLOW_VARIANT=run_01 \
   ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk place
 ```
 
-### `run_ariane133_orfs.sh`
+## Các file đầu vào
 
-Runs the predefined Ariane133 Nangate45 flow:
-
-```bash
-JOBS=1 FLOW_VARIANT=datn \
-  ./openroad_docker_lab/scripts/run_ariane133_orfs.sh
-```
-
-The script performs synthesis, floorplanning, placement, and DEF export.
-
-## Adding a New Design
-
-An ORFS testcase uses the following structure:
+Một testcase ORFS thường có cấu trúc:
 
 ```text
-flow/designs/src/<design>/<top>.v
-flow/designs/nangate45/<design>/config.mk
-flow/designs/nangate45/<design>/constraint.sdc
+flow/
+├── designs/
+│   ├── src/
+│   │   └── <tên-thiết-kế>/
+│   │       └── <top-module>.v
+│   └── nangate45/
+│       └── <tên-thiết-kế>/
+│           ├── config.mk
+│           ├── constraint.sdc
+│           ├── macros.v
+│           ├── memory.lef
+│           └── memory.lib
 ```
 
-The version-controlled template is located at:
+Các file bắt buộc hoặc thường dùng:
 
-```text
-openroad_docker_lab/examples/custom_design/
+### RTL Verilog
+
+File `.v` chứa module top và các module con:
+
+```verilog
+module adder_demo (
+    input  wire       clk,
+    input  wire [7:0] a,
+    input  wire [7:0] b,
+    output reg  [7:0] sum
+);
+  always @(posedge clk) begin
+    sum <= a + b;
+  end
+endmodule
 ```
 
-Create an `adder_demo` testcase:
+Tên module top phải trùng với `DESIGN_NAME` trong `config.mk`.
 
-```bash
-FLOW=openroad_docker_lab/OpenROAD-flow-scripts/flow
+### `config.mk`
 
-mkdir -p "$FLOW/designs/src/adder_demo"
-mkdir -p "$FLOW/designs/nangate45/adder_demo"
-
-cp openroad_docker_lab/examples/custom_design/my_top.v \
-  "$FLOW/designs/src/adder_demo/adder_demo.v"
-cp openroad_docker_lab/examples/custom_design/config.mk \
-  "$FLOW/designs/nangate45/adder_demo/config.mk"
-cp openroad_docker_lab/examples/custom_design/constraint.sdc \
-  "$FLOW/designs/nangate45/adder_demo/constraint.sdc"
-```
-
-Update the copied files:
-
-1. Rename the top-level Verilog module to `adder_demo`.
-2. Set `DESIGN_NAME` and `DESIGN_NICKNAME` to `adder_demo`.
-3. Set `VERILOG_FILES` to the copied RTL file.
-4. Set the clock port and period in `constraint.sdc`.
-
-## Design Configuration
-
-A minimal Nangate45 `config.mk` is:
+`config.mk` mô tả thiết kế, platform và các file đầu vào:
 
 ```make
 export DESIGN_NAME = adder_demo
 export DESIGN_NICKNAME = adder_demo
 export PLATFORM = nangate45
 
-export VERILOG_FILES = $(DESIGN_HOME)/src/$(DESIGN_NICKNAME)/adder_demo.v
-export SDC_FILE = $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/constraint.sdc
+export VERILOG_FILES = \
+  $(DESIGN_HOME)/src/$(DESIGN_NICKNAME)/adder_demo.v
+
+export SDC_FILE = \
+  $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/constraint.sdc
 
 export CORE_UTILIZATION = 50
 export CORE_ASPECT_RATIO = 1
@@ -120,9 +155,7 @@ export CORE_MARGIN = 5
 export ABC_AREA = 1
 ```
 
-`DESIGN_NAME` must exactly match the top-level module name.
-
-For a design with multiple RTL files:
+Nếu thiết kế có nhiều file RTL:
 
 ```make
 export VERILOG_FILES = \
@@ -131,116 +164,129 @@ export VERILOG_FILES = \
   $(DESIGN_HOME)/src/$(DESIGN_NICKNAME)/control.v
 ```
 
-For a design containing hard macros such as SRAM blocks:
+Nếu thiết kế có SRAM hoặc hard macro:
 
 ```make
-export ADDITIONAL_LEFS = /path/to/memory.lef
-export ADDITIONAL_LIBS = /path/to/memory.lib
+export VERILOG_FILES = \
+  $(DESIGN_HOME)/src/$(DESIGN_NICKNAME)/top.v \
+  $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/macros.v
+
+export ADDITIONAL_LEFS = \
+  $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/memory.lef
+
+export ADDITIONAL_LIBS = \
+  $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/memory.lib
 ```
 
-LEF describes the physical macro geometry and pins. Liberty describes timing,
-power, area, and logical behavior.
+Trong đó:
 
-## Timing Constraints
+- `macros.v` khai báo giao diện logic của macro.
+- `memory.lef` mô tả hình học vật lý và vị trí pin.
+- `memory.lib` mô tả timing, công suất và chức năng logic.
 
-For a sequential design with a `clk` input and a 10 ns clock period:
+### `constraint.sdc`
+
+Ví dụ clock chu kỳ 10 ns, tương ứng 100 MHz:
 
 ```tcl
 create_clock -name core_clock -period 10.0 [get_ports clk]
 ```
 
-A 10 ns period represents a 100 MHz clock. The port name in `get_ports` must
-match the RTL top-level clock port.
+Tên `clk` phải trùng với clock port của module top. Một thiết kế thực tế có thể
+cần thêm:
 
-An empty SDC file can be used for a purely combinational smoke test. Real timing
-analysis should also define appropriate input delays, output delays, and clock
-uncertainty.
+```tcl
+set_input_delay  1.0 -clock core_clock [get_ports data_in]
+set_output_delay 1.0 -clock core_clock [get_ports data_out]
+set_clock_uncertainty 0.1 [get_clocks core_clock]
+```
 
-## Running Synthesis
+## Chạy synthesis
 
-Command:
+Cú pháp:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk synth
 ```
 
-The script executes:
+Script thực hiện:
 
 ```text
-RTL parsing and hierarchy elaboration
--> Yosys logic synthesis and optimization
--> ABC technology mapping with Nangate45 Liberty cells
--> Gate-level Verilog generation
--> OpenROAD database generation
+Đọc RTL và Liberty
+-> xác định module top
+-> chuyển process thành logic
+-> tối ưu FSM, memory và biểu thức
+-> ánh xạ flip-flop theo Liberty
+-> ABC ánh xạ logic sang Nangate45
+-> ghi gate-level Verilog
+-> tạo OpenROAD database
 ```
 
-The underlying ORFS target is:
+Lệnh ORFS tương ứng:
 
 ```bash
 make DESIGN_CONFIG=designs/nangate45/adder_demo/config.mk \
   FLOW_VARIANT=datn synth
 ```
 
-Output directory:
+Thư mục kết quả:
 
 ```text
 openroad_docker_lab/OpenROAD-flow-scripts/flow/
   results/nangate45/adder_demo/datn/
 ```
 
-Primary synthesis outputs:
+Các đầu ra quan trọng:
 
 ```text
-1_2_yosys.v    Technology-mapped gate-level Verilog netlist
-1_synth.odb    OpenROAD database containing the synthesized design
-1_synth.sdc    Timing constraints used by downstream stages
+1_2_yosys.v    Netlist gate-level đã ánh xạ sang standard cell Nangate45
+1_synth.odb    Database tổng hợp để OpenROAD tiếp tục xử lý
+1_synth.sdc    Ràng buộc timing dùng cho các stage vật lý
 ```
 
-Synthesis logs:
+Log tổng hợp:
 
 ```text
 openroad_docker_lab/OpenROAD-flow-scripts/flow/
-  logs/nangate45/adder_demo/datn/
+  logs/nangate45/adder_demo/datn/1_2_yosys.log
 ```
 
-The most relevant Yosys log is `1_2_yosys.log`.
+## Chạy floorplan
 
-## Running Floorplanning
-
-Command:
+Cú pháp:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk floorplan
 ```
 
-The script runs:
+Script chạy lần lượt:
 
 ```text
 make ... synth
 make ... do-floorplan
 ```
 
-Main output:
+Đầu ra chính:
 
 ```text
 results/nangate45/adder_demo/datn/2_floorplan.odb
 ```
 
-This database includes the die/core area, rows, tracks, I/O placement, macro
-placement when applicable, tap cells, and power distribution setup.
+Database này chứa die/core area, placement rows, tracks, vị trí I/O, vị trí
+macro, tap cell và cấu hình mạng nguồn.
 
-## Running Placement
+## Chạy placement
 
-Command:
+Cú pháp:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk place
 ```
 
-The script runs:
+Script chạy lần lượt:
 
 ```text
 make ... synth
@@ -248,63 +294,120 @@ make ... do-floorplan
 make ... do-place
 ```
 
-Main output:
+Đầu ra chính:
 
 ```text
 results/nangate45/adder_demo/datn/3_place.odb
 ```
 
-The placement stage performs global placement, I/O placement, timing-driven
-resizing, and detailed placement according to the ORFS flow configuration.
+Stage placement gồm global placement, I/O placement, timing-driven resizing và
+detailed placement.
 
-## Ariane133 Outputs
+## Tạo `netlist.pb.txt` và `initial.plc`
 
-Command:
+Sau synthesis và physical design, Code Flow cần một run directory có các file
+vật lý và file thiết lập phù hợp. Giao diện Python là:
 
 ```bash
-JOBS=1 ./openroad_docker_lab/scripts/run_ariane133_orfs.sh
+python MacroPlacement/Flows/util/flow.py \
+  <run-directory> <output-directory>
 ```
 
-Output directory:
+Hoặc chạy wrapper trong run directory:
+
+```bash
+export PHY_SYNTH=1
+MacroPlacement/Flows/util/run_CodeFlow.sh
+```
+
+Các bước chính của Code Flow:
 
 ```text
-openroad_docker_lab/OpenROAD-flow-scripts/flow/
-  results/nangate45/ariane133/datn/
+DEF + gate-level netlist + LEF
+-> gridding
+-> grouping
+-> hypergraph clustering
+-> soft-macro netlist
+-> netlist.pb.txt + initial.plc
 ```
 
-Primary outputs:
+`netlist.pb.txt` chứa đồ thị kết nối, macro, macro pin, port và soft macro.
+`initial.plc` chứa kích thước canvas, lưới placement, tọa độ và orientation; tùy
+phiên bản Code Flow, phần đầu file có thể kèm các chỉ số proxy như wirelength,
+congestion và density.
+
+Code Flow TILOS hiện dùng lệnh OpenROAD cũ `partition_design`. Vì vậy cần dùng
+đúng phiên bản OpenROAD tương thích với CodeElements khi muốn tạo lại hai file
+này từ DEF.
+
+## Ví dụ cuối: tổng hợp Ariane133 cho luồng DreamPlace/macro placement
+
+Bộ đầu vào Ariane133 có sẵn tại:
 
 ```text
-1_synth.odb       Synthesized OpenROAD database
-2_floorplan.odb   Floorplanned database
-3_place.odb       Placed database
-3_place.def       DEF exported from the placed database
+MacroPlacement/Flows/NanGate45/ariane133/scripts/OpenROAD/ariane133/
 ```
 
-## Relationship to the RL Input
-
-The OpenROAD flow produces ODB and DEF files. The current PPO environment reads:
+Các file chính:
 
 ```text
-netlist.pb.txt
-initial.plc
+ariane.v                    RTL Verilog của thiết kế Ariane
+config.mk                   Cấu hình ORFS và Nangate45
+constraint.sdc              Clock và các ràng buộc timing
+macros.v                    Khai báo logic của SRAM macro
+fakeram45_256x16.lef        Hình học vật lý của SRAM
+fakeram45_256x16.lib        Timing và chức năng của SRAM
 ```
 
-The legacy TILOS conversion flow used the OpenROAD `partition_design` command to
-generate a hypergraph before producing these files. That command is not
-available in the current OpenROAD build. Ariane133 training therefore uses the
-existing benchmark files:
+Chép testcase Ariane vào cây thiết kế của ORFS:
+
+```bash
+FLOW=openroad_docker_lab/OpenROAD-flow-scripts/flow
+SRC=MacroPlacement/Flows/NanGate45/ariane133/scripts/OpenROAD/ariane133
+
+mkdir -p "$FLOW/designs/nangate45/ariane133"
+cp "$SRC/ariane.v" "$FLOW/designs/nangate45/ariane133/"
+cp "$SRC/config.mk" "$FLOW/designs/nangate45/ariane133/"
+cp "$SRC/constraint.sdc" "$FLOW/designs/nangate45/ariane133/"
+cp "$SRC/macros.v" "$FLOW/designs/nangate45/ariane133/"
+cp "$SRC/fakeram45_256x16.lef" "$FLOW/designs/nangate45/ariane133/"
+cp "$SRC/fakeram45_256x16.lib" "$FLOW/designs/nangate45/ariane133/"
+```
+
+Chạy riêng synthesis:
+
+```bash
+JOBS=1 FLOW_VARIANT=ariane_synth \
+  ./openroad_docker_lab/scripts/run_orfs_design.sh \
+  designs/nangate45/ariane133/config.mk synth
+```
+
+Chạy đến placement:
+
+```bash
+JOBS=1 FLOW_VARIANT=ariane_place \
+  ./openroad_docker_lab/scripts/run_orfs_design.sh \
+  designs/nangate45/ariane133/config.mk place
+```
+
+Kết quả synthesis:
+
+```text
+results/nangate45/ariane133/ariane_synth/1_2_yosys.v
+results/nangate45/ariane133/ariane_synth/1_synth.odb
+results/nangate45/ariane133/ariane_synth/1_synth.sdc
+```
+
+Kết quả placement:
+
+```text
+results/nangate45/ariane133/ariane_place/2_floorplan.odb
+results/nangate45/ariane133/ariane_place/3_place.odb
+```
+
+Đầu vào macro placement/RL đã được tạo sẵn tại:
 
 ```text
 MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt
 MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc
-```
-
-Run PPO on the GPU host:
-
-```bash
-source rl_env/bin/activate
-
-EPISODES=10 ROLLOUT_EPISODES=2 BATCH_SIZE=1 MAX_EDGES=4000 \
-  ./rl_macroplacement_agent/scripts/run_ariane133_ppo.sh
 ```

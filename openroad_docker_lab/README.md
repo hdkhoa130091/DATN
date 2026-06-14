@@ -65,25 +65,10 @@ repository DATN vào:
 Nếu container đã tồn tại, script chỉ khởi động lại rồi mở `bash`, không xóa và
 không build lại image.
 
-## 5.1. Chạy Ariane133 từ synthesis đến placement
+## 5.1. Quy trình synthesis
 
-Từ thư mục gốc DATN trên máy local:
-
-```bash
-JOBS=1 ./openroad_docker_lab/scripts/run_ariane133_orfs.sh
-```
-
-Flow chạy Yosys synthesis, OpenROAD floorplan và placement. Kết quả chính nằm
-trong:
-
-```text
-openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/ariane133/datn
-```
-
-Các file chính là `1_synth.odb`, `2_floorplan.odb`, `3_place.odb` và
-`3_place.def`.
-
-Detailed synthesis workflow and custom RTL configuration guide:
+Tài liệu mô tả đầu vào, đầu ra, `config.mk`, SDC, các stage synthesis,
+floorplan, placement và ví dụ Ariane133:
 
 ```text
 openroad_docker_lab/SYNTHESIS_GUIDE.md

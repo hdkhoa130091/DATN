@@ -230,11 +230,23 @@ make DESIGN_CONFIG=designs/nangate45/adder_demo/config.mk \
   FLOW_VARIANT=datn synth
 ```
 
-Mỗi testcase có thư mục kết quả riêng theo công thức:
+ORFS sử dụng thư mục nội bộ sau để truyền dữ liệu giữa các stage:
 
 ```text
 openroad_docker_lab/OpenROAD-flow-scripts/flow/
   results/<platform>/<design>/<flow-variant>/
+```
+
+Không đổi tên hoặc xóa thư mục `results/` khi đang chạy flow vì floorplan cần
+đọc kết quả synthesis và placement cần đọc kết quả floorplan.
+
+Script `run_orfs_design.sh` đồng thời xuất kết quả từng stage sang các thư mục
+dễ nhận biết hơn:
+
+```text
+SynthesisResults/<platform>/<design>/<flow-variant>/
+FloorplanningResults/<platform>/<design>/<flow-variant>/
+PlacementResults/<platform>/<design>/<flow-variant>/
 ```
 
 Trong đó:
@@ -244,11 +256,19 @@ Trong đó:
 - `<flow-variant>` lấy từ biến môi trường `FLOW_VARIANT`; nếu không đặt thì
   script sử dụng giá trị mặc định `datn`.
 
-Với lệnh ví dụ phía trên, đường dẫn cụ thể là:
+Với lệnh `adder_demo` phía trên, kết quả synthesis được xuất tại:
 
 ```text
 openroad_docker_lab/OpenROAD-flow-scripts/flow/
-  results/nangate45/adder_demo/datn/
+  SynthesisResults/nangate45/adder_demo/datn/
+```
+
+Ví dụ, nếu testcase là `mempool`, platform là `nangate45` và không thay đổi
+`FLOW_VARIANT`, kết quả synthesis nằm tại:
+
+```text
+openroad_docker_lab/OpenROAD-flow-scripts/flow/
+  SynthesisResults/nangate45/mempool/datn/
 ```
 
 Các đầu ra quan trọng:
@@ -285,7 +305,7 @@ make ... do-floorplan
 Đầu ra chính:
 
 ```text
-results/<platform>/<design>/<flow-variant>/2_floorplan.odb
+FloorplanningResults/<platform>/<design>/<flow-variant>/2_floorplan.odb
 ```
 
 Database này chứa die/core area, placement rows, tracks, vị trí I/O, vị trí
@@ -311,7 +331,7 @@ make ... do-place
 Đầu ra chính:
 
 ```text
-results/<platform>/<design>/<flow-variant>/3_place.odb
+PlacementResults/<platform>/<design>/<flow-variant>/3_place.odb
 ```
 
 Stage placement gồm global placement, I/O placement, timing-driven resizing và
@@ -407,16 +427,16 @@ JOBS=1 FLOW_VARIANT=ariane_place \
 Kết quả synthesis:
 
 ```text
-results/nangate45/ariane133/ariane_synth/1_2_yosys.v
-results/nangate45/ariane133/ariane_synth/1_synth.odb
-results/nangate45/ariane133/ariane_synth/1_synth.sdc
+SynthesisResults/nangate45/ariane133/ariane_synth/1_2_yosys.v
+SynthesisResults/nangate45/ariane133/ariane_synth/1_synth.odb
+SynthesisResults/nangate45/ariane133/ariane_synth/1_synth.sdc
 ```
 
 Kết quả placement:
 
 ```text
-results/nangate45/ariane133/ariane_place/2_floorplan.odb
-results/nangate45/ariane133/ariane_place/3_place.odb
+FloorplanningResults/nangate45/ariane133/ariane_place/2_floorplan.odb
+PlacementResults/nangate45/ariane133/ariane_place/3_place.odb
 ```
 
 Đầu vào macro placement/RL đã được tạo sẵn tại:

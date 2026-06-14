@@ -83,7 +83,7 @@ openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/ariane133/datn
 Các file chính là `1_synth.odb`, `2_floorplan.odb`, `3_place.odb` và
 `3_place.def`.
 
-Huong dan tao va chay mot testcase RTL bat ky:
+Detailed synthesis workflow and custom RTL configuration guide:
 
 ```text
 openroad_docker_lab/SYNTHESIS_GUIDE.md

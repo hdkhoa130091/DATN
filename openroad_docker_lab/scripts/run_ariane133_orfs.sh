@@ -9,12 +9,13 @@ JOBS="${JOBS:-1}"
 FLOW_VARIANT="${FLOW_VARIANT:-datn}"
 
 if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-  echo "Khong tim thay image ${IMAGE_NAME}. Chay ./openroad_docker_lab/scripts/build.sh truoc."
+  echo "Docker image not found: ${IMAGE_NAME}"
+  echo "Build it with ./openroad_docker_lab/scripts/build.sh"
   exit 1
 fi
 
 if ! docker container inspect "${CONTAINER_NAME}" >/dev/null 2>&1; then
-  echo "Tao container ${CONTAINER_NAME}..."
+  echo "Creating container ${CONTAINER_NAME}..."
   docker run -d \
     --name "${CONTAINER_NAME}" \
     -v "${PROJECT_DIR}:/workspace/DATN" \
@@ -27,13 +28,13 @@ if [ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER_NAME}")" != "true" ]
   docker start "${CONTAINER_NAME}" >/dev/null
 fi
 
-echo "[1/4] Kiem tra Yosys va OpenROAD"
+echo "[1/4] Checking Yosys and OpenROAD"
 docker exec "${CONTAINER_NAME}" bash -lc '
   /opt/oss-cad-suite/bin/yosys -V
   /usr/local/bin/openroad -version
 '
 
-echo "[2/4] Chay synthesis, floorplan va placement cho Ariane133"
+echo "[2/4] Running Ariane133 synthesis, floorplanning, and placement"
 docker exec \
   -e PATH="/opt/oss-cad-suite/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
   -e YOSYS_EXE="/opt/oss-cad-suite/bin/yosys" \
@@ -58,7 +59,7 @@ docker exec \
       do-place
   '
 
-echo "[3/4] Xuat DEF tu ODB placement"
+echo "[3/4] Exporting DEF from the placed ODB"
 docker exec \
   -w /workspace/DATN/openroad_docker_lab/OpenROAD-flow-scripts/flow \
   -e FLOW_VARIANT="${FLOW_VARIANT}" \
@@ -76,10 +77,10 @@ EOF
   '
 
 RESULT_DIR="${PROJECT_DIR}/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/ariane133/${FLOW_VARIANT}"
-echo "[4/4] Kiem tra ket qua"
+echo "[4/4] Verifying output files"
 for output in 1_synth.odb 2_floorplan.odb 3_place.odb 3_place.def; do
   if [ ! -s "${RESULT_DIR}/${output}" ]; then
-    echo "Thieu ket qua: ${RESULT_DIR}/${output}"
+    echo "Missing output: ${RESULT_DIR}/${output}"
     exit 1
   fi
   ls -lh "${RESULT_DIR}/${output}"
@@ -87,11 +88,12 @@ done
 
 cat <<EOF
 
-OpenROAD da hoan thanh.
-Ket qua: ${RESULT_DIR}
+OpenROAD flow completed.
+Results: ${RESULT_DIR}
 
-Luu y: CodeElements TILOS cu dung lenh 'partition_design', lenh nay khong
-con trong OpenROAD moi. De train RL ngay, dung bo benchmark da co:
+The legacy TILOS CodeElements flow requires the OpenROAD 'partition_design'
+command, which is unavailable in the current build. Use the existing Ariane133
+benchmark files for RL training:
   MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt
   MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc
 EOF

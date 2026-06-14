@@ -1,49 +1,85 @@
-# Huong dan synthesis thiet ke bat ky voi Yosys va OpenROAD
+# Yosys and OpenROAD Synthesis Workflow
 
-Tai lieu nay huong dan tao mot testcase RTL moi, synthesis bang Yosys, sau do
-tuy chon chay floorplan va placement bang OpenROAD-flow-scripts (ORFS).
+This guide describes the reusable scripts provided by this repository for
+running RTL synthesis, floorplanning, and placement with the Nangate45
+technology.
 
-## 1. Dieu kien ban dau
+## Workflow Scripts
 
-Thuc hien tren may local co Docker:
+### `run_cli.sh`
 
-```bash
-cd /home/khoahd/Documents/DATN-1
-docker image inspect openroad-docker-lab:latest
-```
-
-Neu image chua ton tai:
-
-```bash
-./openroad_docker_lab/scripts/build.sh
-```
-
-Mo terminal trong container khi can kiem tra thu cong:
+Opens an interactive shell in the persistent `openroad_cli` container:
 
 ```bash
 ./openroad_docker_lab/scripts/run_cli.sh
 ```
 
-Repository tren host duoc mount vao `/workspace/DATN` trong container.
-Container `openroad_cli` duoc tai su dung, khong bi xoa moi lan chay.
+The repository is mounted at `/workspace/DATN` inside the container. An existing
+container is restarted and reused instead of being recreated.
 
-## 2. Cau truc mot testcase
+### `run_orfs_design.sh`
 
-ORFS can ba thanh phan chinh:
+Runs a design described by an OpenROAD-flow-scripts configuration file:
 
-```text
-designs/src/<ten_testcase>/<top>.v
-designs/nangate45/<ten_testcase>/config.mk
-designs/nangate45/<ten_testcase>/constraint.sdc
+```bash
+./openroad_docker_lab/scripts/run_orfs_design.sh \
+  <design-config.mk> [synth|floorplan|place]
 ```
 
-Template cua repository nam tai:
+Arguments:
+
+- `<design-config.mk>` is relative to
+  `openroad_docker_lab/OpenROAD-flow-scripts/flow/`.
+- `synth` runs Yosys synthesis and creates an OpenROAD database.
+- `floorplan` runs synthesis followed by OpenROAD floorplanning.
+- `place` runs synthesis, floorplanning, and placement.
+- The stage defaults to `synth` when the second argument is omitted.
+
+Optional environment variables:
+
+```text
+JOBS             Number of parallel make jobs. Default: 1
+FLOW_VARIANT     Name of the output run. Default: datn
+CONTAINER_NAME   Docker container name. Default: openroad_cli
+IMAGE_NAME       Docker image name. Default: openroad-docker-lab:latest
+```
+
+Example:
+
+```bash
+JOBS=4 FLOW_VARIANT=experiment_01 \
+  ./openroad_docker_lab/scripts/run_orfs_design.sh \
+  designs/nangate45/adder_demo/config.mk place
+```
+
+### `run_ariane133_orfs.sh`
+
+Runs the predefined Ariane133 Nangate45 flow:
+
+```bash
+JOBS=1 FLOW_VARIANT=datn \
+  ./openroad_docker_lab/scripts/run_ariane133_orfs.sh
+```
+
+The script performs synthesis, floorplanning, placement, and DEF export.
+
+## Adding a New Design
+
+An ORFS testcase uses the following structure:
+
+```text
+flow/designs/src/<design>/<top>.v
+flow/designs/nangate45/<design>/config.mk
+flow/designs/nangate45/<design>/constraint.sdc
+```
+
+The version-controlled template is located at:
 
 ```text
 openroad_docker_lab/examples/custom_design/
 ```
 
-Tao testcase moi, vi du `adder_demo`:
+Create an `adder_demo` testcase:
 
 ```bash
 FLOW=openroad_docker_lab/OpenROAD-flow-scripts/flow
@@ -59,15 +95,16 @@ cp openroad_docker_lab/examples/custom_design/constraint.sdc \
   "$FLOW/designs/nangate45/adder_demo/constraint.sdc"
 ```
 
-Sau do sua:
+Update the copied files:
 
-- `adder_demo.v`: doi ten module top thanh `adder_demo`.
-- `config.mk`: doi `DESIGN_NAME`, `DESIGN_NICKNAME` va ten file Verilog.
-- `constraint.sdc`: doi port clock va chu ky clock.
+1. Rename the top-level Verilog module to `adder_demo`.
+2. Set `DESIGN_NAME` and `DESIGN_NICKNAME` to `adder_demo`.
+3. Set `VERILOG_FILES` to the copied RTL file.
+4. Set the clock port and period in `constraint.sdc`.
 
-## 3. Noi dung config.mk
+## Design Configuration
 
-Mau toi thieu:
+A minimal Nangate45 `config.mk` is:
 
 ```make
 export DESIGN_NAME = adder_demo
@@ -83,9 +120,9 @@ export CORE_MARGIN = 5
 export ABC_AREA = 1
 ```
 
-`DESIGN_NAME` phai trung voi ten module top trong Verilog.
+`DESIGN_NAME` must exactly match the top-level module name.
 
-Neu design co nhieu file RTL:
+For a design with multiple RTL files:
 
 ```make
 export VERILOG_FILES = \
@@ -94,163 +131,180 @@ export VERILOG_FILES = \
   $(DESIGN_HOME)/src/$(DESIGN_NICKNAME)/control.v
 ```
 
-Neu design co macro SRAM, can khai bao them LEF va Liberty:
+For a design containing hard macros such as SRAM blocks:
 
 ```make
-export ADDITIONAL_LEFS = /duong/dan/toi/memory.lef
-export ADDITIONAL_LIBS = /duong/dan/toi/memory.lib
+export ADDITIONAL_LEFS = /path/to/memory.lef
+export ADDITIONAL_LIBS = /path/to/memory.lib
 ```
 
-## 4. Noi dung constraint.sdc
+LEF describes the physical macro geometry and pins. Liberty describes timing,
+power, area, and logical behavior.
 
-Voi mach co clock:
+## Timing Constraints
+
+For a sequential design with a `clk` input and a 10 ns clock period:
 
 ```tcl
 create_clock -name core_clock -period 10.0 [get_ports clk]
 ```
 
-`period 10.0` tuong ung clock 100 MHz. Port `clk` phai ton tai trong module top.
+A 10 ns period represents a 100 MHz clock. The port name in `get_ports` must
+match the RTL top-level clock port.
 
-Voi mach to hop khong co clock, co the de file SDC rong. Tuy nhien nen bo sung
-input/output delay khi can phan tich timing nghiem tuc.
+An empty SDC file can be used for a purely combinational smoke test. Real timing
+analysis should also define appropriate input delays, output delays, and clock
+uncertainty.
 
-## 5. Chay synthesis
+## Running Synthesis
 
-Tu thu muc goc repository:
+Command:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk synth
 ```
 
-Buoc nay thuc hien:
+The script executes:
 
 ```text
-RTL Verilog
--> Yosys elaboration va optimization
--> ABC technology mapping
--> Nangate45 standard cells
--> OpenROAD database
+RTL parsing and hierarchy elaboration
+-> Yosys logic synthesis and optimization
+-> ABC technology mapping with Nangate45 Liberty cells
+-> Gate-level Verilog generation
+-> OpenROAD database generation
 ```
 
-Ket qua:
+The underlying ORFS target is:
+
+```bash
+make DESIGN_CONFIG=designs/nangate45/adder_demo/config.mk \
+  FLOW_VARIANT=datn synth
+```
+
+Output directory:
 
 ```text
-openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/adder_demo/datn/
+openroad_docker_lab/OpenROAD-flow-scripts/flow/
+  results/nangate45/adder_demo/datn/
 ```
 
-File quan trong:
-
-- `1_2_yosys.v`: gate-level netlist sau technology mapping.
-- `1_synth.odb`: database synthesis cho OpenROAD.
-- `1_synth.sdc`: timing constraints cua design.
-
-Log Yosys:
+Primary synthesis outputs:
 
 ```text
-openroad_docker_lab/OpenROAD-flow-scripts/flow/logs/nangate45/adder_demo/datn/
+1_2_yosys.v    Technology-mapped gate-level Verilog netlist
+1_synth.odb    OpenROAD database containing the synthesized design
+1_synth.sdc    Timing constraints used by downstream stages
 ```
 
-## 6. Chay floorplan hoac placement
+Synthesis logs:
 
-Synthesis va floorplan:
+```text
+openroad_docker_lab/OpenROAD-flow-scripts/flow/
+  logs/nangate45/adder_demo/datn/
+```
+
+The most relevant Yosys log is `1_2_yosys.log`.
+
+## Running Floorplanning
+
+Command:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk floorplan
 ```
 
-Synthesis, floorplan va placement:
+The script runs:
+
+```text
+make ... synth
+make ... do-floorplan
+```
+
+Main output:
+
+```text
+results/nangate45/adder_demo/datn/2_floorplan.odb
+```
+
+This database includes the die/core area, rows, tracks, I/O placement, macro
+placement when applicable, tap cells, and power distribution setup.
+
+## Running Placement
+
+Command:
 
 ```bash
 ./openroad_docker_lab/scripts/run_orfs_design.sh \
   designs/nangate45/adder_demo/config.mk place
 ```
 
-Co the tang so job:
+The script runs:
 
-```bash
-JOBS=4 FLOW_VARIANT=run01 \
-  ./openroad_docker_lab/scripts/run_orfs_design.sh \
-  designs/nangate45/adder_demo/config.mk place
+```text
+make ... synth
+make ... do-floorplan
+make ... do-place
 ```
 
-Ket qua cua lenh tren nam trong thu muc variant `run01`.
+Main output:
 
-## 7. Chay Ariane133
+```text
+results/nangate45/adder_demo/datn/3_place.odb
+```
 
-Ariane133 co script rieng:
+The placement stage performs global placement, I/O placement, timing-driven
+resizing, and detailed placement according to the ORFS flow configuration.
+
+## Ariane133 Outputs
+
+Command:
 
 ```bash
 JOBS=1 ./openroad_docker_lab/scripts/run_ariane133_orfs.sh
 ```
 
-Ket qua:
+Output directory:
 
 ```text
-openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/ariane133/datn/
+openroad_docker_lab/OpenROAD-flow-scripts/flow/
+  results/nangate45/ariane133/datn/
 ```
 
-File chinh:
+Primary outputs:
 
-- `1_synth.odb`
-- `2_floorplan.odb`
-- `3_place.odb`
-- `3_place.def`
+```text
+1_synth.odb       Synthesized OpenROAD database
+2_floorplan.odb   Floorplanned database
+3_place.odb       Placed database
+3_place.def       DEF exported from the placed database
+```
 
-## 8. Lien he voi dau vao RL
+## Relationship to the RL Input
 
-OpenROAD sinh `ODB/DEF`, nhung PPO hien tai doc truc tiep:
+The OpenROAD flow produces ODB and DEF files. The current PPO environment reads:
 
 ```text
 netlist.pb.txt
 initial.plc
 ```
 
-CodeElements TILOS cu dung lenh OpenROAD `partition_design` de chuyen DEF sang
-hypergraph va Protocol Buffer. Lenh nay khong con trong OpenROAD moi cua image.
-Vi vay, de train Ariane133 ngay, dung bo benchmark da co:
+The legacy TILOS conversion flow used the OpenROAD `partition_design` command to
+generate a hypergraph before producing these files. That command is not
+available in the current OpenROAD build. Ariane133 training therefore uses the
+existing benchmark files:
 
 ```text
 MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt
 MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc
 ```
 
-Sau do tren may GPU:
+Run PPO on the GPU host:
 
 ```bash
 source rl_env/bin/activate
 
 EPISODES=10 ROLLOUT_EPISODES=2 BATCH_SIZE=1 MAX_EDGES=4000 \
   ./rl_macroplacement_agent/scripts/run_ariane133_ppo.sh
-```
-
-## 9. Loi thuong gap
-
-### Khong tim thay Docker image
-
-```bash
-./openroad_docker_lab/scripts/build.sh
-```
-
-### `DESIGN_NAME` khong ton tai
-
-Kiem tra ten module top trong Verilog co trung voi `DESIGN_NAME` hay khong.
-
-### Khong tim thay port clock
-
-Sua `[get_ports clk]` trong SDC thanh ten port clock that.
-
-### Thieu LEF hoac Liberty cua macro
-
-Khai bao `ADDITIONAL_LEFS` va `ADDITIONAL_LIBS` trong `config.mk`.
-
-### Muon chay lai tu dau
-
-Doi `FLOW_VARIANT` de tao thu muc ket qua moi:
-
-```bash
-FLOW_VARIANT=run02 \
-  ./openroad_docker_lab/scripts/run_orfs_design.sh \
-  designs/nangate45/adder_demo/config.mk synth
 ```

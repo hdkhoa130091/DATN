@@ -20,13 +20,13 @@ INIT_PLC="MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/in
 
 for input in "${NETLIST}" "${INIT_PLC}"; do
   if [ ! -s "${input}" ]; then
-    echo "Thieu input RL: ${input}"
+    echo "RL input not found: ${input}"
     exit 1
   fi
 done
 
 if [ "${DEVICE}" = "cuda" ]; then
-  "${PYTHON_BIN}" -c 'import torch; assert torch.cuda.is_available(), "PyTorch khong nhan CUDA"; print(torch.cuda.get_device_name(0))'
+  "${PYTHON_BIN}" -c 'import torch; assert torch.cuda.is_available(), "CUDA is not available in PyTorch"; print(torch.cuda.get_device_name(0))'
 fi
 
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
@@ -44,4 +44,4 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
   --batch_size "${BATCH_SIZE}" \
   --device "${DEVICE}"
 
-echo "Da luu model va log tai ${OUT_DIR}"
+echo "Model and training logs saved to ${OUT_DIR}"

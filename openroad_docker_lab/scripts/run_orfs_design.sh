@@ -30,19 +30,20 @@ fi
 case "${STAGE}" in
   synth|floorplan|place) ;;
   *)
-    echo "Stage khong hop le: ${STAGE}"
+    echo "Invalid stage: ${STAGE}"
     usage
     exit 2
     ;;
 esac
 
 if [ ! -s "${FLOW_DIR}/${DESIGN_CONFIG}" ]; then
-  echo "Khong tim thay config: ${FLOW_DIR}/${DESIGN_CONFIG}"
+  echo "Design configuration not found: ${FLOW_DIR}/${DESIGN_CONFIG}"
   exit 1
 fi
 
 if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-  echo "Khong tim thay image ${IMAGE_NAME}. Chay ./openroad_docker_lab/scripts/build.sh truoc."
+  echo "Docker image not found: ${IMAGE_NAME}"
+  echo "Build it with ./openroad_docker_lab/scripts/build.sh"
   exit 1
 fi
 
@@ -95,5 +96,5 @@ docker exec \
   '
 
 echo
-echo "Hoan thanh stage ${STAGE}."
-echo "Ket qua nam trong ${FLOW_DIR}/results/<platform>/<design>/${FLOW_VARIANT}/"
+echo "Completed stage: ${STAGE}"
+echo "Results: ${FLOW_DIR}/results/<platform>/<design>/${FLOW_VARIANT}/"

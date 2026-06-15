@@ -7,6 +7,10 @@ LOG_FILE="${LOG_DIR}/container_tools.log"
 mkdir -p "${LOG_DIR}"
 
 {
+  echo "=== PATH ==="
+  echo "${PATH}"
+  echo
+
   echo "=== which yosys || true ==="
   which yosys || true
   echo
@@ -47,11 +51,23 @@ mkdir -p "${LOG_DIR}"
   git --version
   echo
 
+  echo "=== /opt/oss-cad-suite/bin/yosys-abc -h || true ==="
+  /opt/oss-cad-suite/bin/yosys-abc -h || true
+  echo
+
   echo "=== abc -h || yosys-abc -h || true ==="
   abc -h || yosys-abc -h || true
   echo
 
   if ! command -v openroad >/dev/null 2>&1; then
-    echo "OpenROAD chưa có trong image. Có thể cần dùng official/prebuilt OpenROAD image hoặc build OpenROAD-flow-scripts."
+    echo "OpenROAD binary is not on PATH."
+  fi
+
+  if [ ! -x /opt/oss-cad-suite/bin/yosys ]; then
+    echo "Yosys binary is missing at /opt/oss-cad-suite/bin/yosys."
+  fi
+
+  if [ ! -x /opt/oss-cad-suite/bin/yosys-abc ]; then
+    echo "yosys-abc binary is missing at /opt/oss-cad-suite/bin/yosys-abc."
   fi
 } | tee "${LOG_FILE}"

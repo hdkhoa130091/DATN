@@ -58,7 +58,10 @@ RUN set -e; \
 RUN mkdir -p /opt/oss-cad-suite && \
     curl -fL --retry 8 --retry-delay 5 --retry-all-errors "${OSS_CAD_SUITE_URL}" -o /tmp/oss-cad-suite.tgz && \
     tar -xzf /tmp/oss-cad-suite.tgz -C /opt/oss-cad-suite --strip-components=1 && \
-    rm -f /tmp/oss-cad-suite.tgz
+    rm -f /tmp/oss-cad-suite.tgz && \
+    ln -sf /opt/oss-cad-suite/bin/yosys /usr/local/bin/yosys && \
+    ln -sf /opt/oss-cad-suite/bin/yosys-abc /usr/local/bin/yosys-abc && \
+    ln -sf /opt/oss-cad-suite/bin/yosys-abc /usr/local/bin/abc
 
 RUN curl -fL "https://github.com/bazelbuild/bazelisk/releases/download/v${BAZELISK_VERSION}/bazelisk-linux-amd64" \
       -o /usr/local/bin/bazelisk && \
@@ -81,6 +84,7 @@ ENV LC_ALL=en_US.UTF-8
 ENV ORFS_ROOT=/opt/OpenROAD-flow-scripts
 ENV OPENROAD_EXE=/usr/local/bin/openroad
 ENV YOSYS_EXE=/opt/oss-cad-suite/bin/yosys
+ENV PATH=/opt/oss-cad-suite/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WORKDIR /workspace
 
 CMD ["bash"]

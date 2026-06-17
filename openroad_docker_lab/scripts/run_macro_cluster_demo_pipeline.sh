@@ -75,6 +75,10 @@ run_in_openroad "python3 MacroPlacement/Flows/util/flow.py \
   MacroPlacement/Flows/NanGate45/generated/macro_cluster_demo/${RUN_NAME} \
   MacroPlacement/Flows/NanGate45/generated/macro_cluster_demo/${RUN_NAME}/output_CodeElement"
 
+echo "[6.5/7] Normalizing NG45 PLC metadata"
+run_in_openroad "python3 openroad_docker_lab/scripts/normalize_plc_metadata.py \
+  MacroPlacement/Flows/NanGate45/generated/macro_cluster_demo/${RUN_NAME}/macro_cluster_demo.plc"
+
 echo "[7/7] Validating generated dataset"
 run_in_openroad "python3 rl_macroplacement_agent/scripts/inspect_dataset.py \
   --netlist MacroPlacement/Flows/NanGate45/generated/macro_cluster_demo/${RUN_NAME}/macro_cluster_demo.pb.txt \

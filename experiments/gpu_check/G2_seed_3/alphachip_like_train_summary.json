@@ -1,0 +1,32 @@
+{
+  "model_path": "experiments/gpu_check/G2_seed_3/alphachip_like_actor_critic.pt",
+  "history_csv": "experiments/gpu_check/G2_seed_3/alphachip_like_training_history.csv",
+  "episodes": 50,
+  "rollout_episodes": 4,
+  "max_macros": 133,
+  "max_nodes": 1024,
+  "max_edges": 4000,
+  "max_grid": 32,
+  "batch_size": 1,
+  "device": "cuda",
+  "resume_from": null,
+  "stage_name": "",
+  "best_cost": 0.08401855740901039,
+  "last_episode": {
+    "initial_cost": 0.048069342973456206,
+    "final_cost": 0.09021179386344405,
+    "episode_reward": -42.142452239990234,
+    "steps": 133,
+    "invalid_action": null,
+    "wirelength": 5840679.798025971,
+    "density_cost": 0.8714167290590719,
+    "congestion_cost": 0.7711881906240856,
+    "loss": 0.1406799940921058,
+    "policy_loss": -0.009379468775088233,
+    "value_loss": 0.40545818870042494,
+    "entropy": 5.266963394960963,
+    "approx_kl": 0.00032685551428257077,
+    "clip_fraction": 0.12593984962406016
+  },
+  "train_runtime_sec": 835.8504874289501
+}

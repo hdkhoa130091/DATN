@@ -38,8 +38,8 @@ MacroPlacement benchmark
 
 Script chính:
 
-- `rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py`
-- `rl_macroplacement_agent/scripts/evaluate_alphachip_like_policy.py`
+- `rl_macroplacement_agent/scripts/train_ppo.py`
+- `rl_macroplacement_agent/scripts/eval_policy.py`
 
 Đầu vào trực tiếp:
 
@@ -78,7 +78,7 @@ Mở GUI:
 ```bash
 cd openroad_docker_lab
 xhost +local:docker
-./scripts/run_gui_x11.sh
+./scripts/run_gui.sh
 ```
 
 Trong container:
@@ -90,9 +90,9 @@ openroad -gui
 ## RL train nhanh
 
 ```bash
-python rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py \
+python rl_macroplacement_agent/scripts/train_ppo.py \
   --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
-  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial_safe.plc \
   --out_dir rl_macroplacement_agent/results/ariane133_ng45/alphachip_like/train \
   --episodes 10 \
   --rollout_episodes 4 \
@@ -106,11 +106,11 @@ python rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py \
 ## Cây thư mục nên quan tâm
 
 ```text
-rl_macroplacement_agent/scripts/alphachip_like_features.py
-rl_macroplacement_agent/scripts/alphachip_like_model.py
-rl_macroplacement_agent/scripts/alphachip_like_agent.py
-rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py
-rl_macroplacement_agent/scripts/evaluate_alphachip_like_policy.py
+rl_macroplacement_agent/scripts/obs_features.py
+rl_macroplacement_agent/scripts/policy_model.py
+rl_macroplacement_agent/scripts/ppo_agent.py
+rl_macroplacement_agent/scripts/train_ppo.py
+rl_macroplacement_agent/scripts/eval_policy.py
 rl_macroplacement_agent/scripts/eval_proxy.py
 rl_macroplacement_agent/scripts/run_dreamplace_baseline.py
 rl_macroplacement_agent/scripts/convert_bookshelf_pl_to_plc.py

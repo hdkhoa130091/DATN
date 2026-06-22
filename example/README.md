@@ -38,13 +38,13 @@ example/macro_cluster_demo.v
 Script orchestration:
 
 ```bash
-./openroad_docker_lab/scripts/run_macro_cluster_demo_pipeline.sh
+./openroad_docker_lab/scripts/run_demo_pipeline.sh
 ```
 
 Nếu muốn chạy thêm RL smoke test ở cuối:
 
 ```bash
-RUN_RL=1 ./openroad_docker_lab/scripts/run_macro_cluster_demo_pipeline.sh
+RUN_RL=1 ./openroad_docker_lab/scripts/run_demo_pipeline.sh
 ```
 
 ## Vì sao `simple_sram.v` không phù hợp cho RL hiện tại

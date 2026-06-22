@@ -1,0 +1,32 @@
+{
+  "model_path": "/kaggle/working/DATN/experiments/kaggle/H1_seed_1/alphachip_like_actor_critic.pt",
+  "history_csv": "/kaggle/working/DATN/experiments/kaggle/H1_seed_1/alphachip_like_training_history.csv",
+  "episodes": 50,
+  "rollout_episodes": 4,
+  "max_macros": 133,
+  "max_nodes": 1024,
+  "max_edges": 6000,
+  "max_grid": 32,
+  "batch_size": 4,
+  "device": "cuda",
+  "resume_from": null,
+  "stage_name": "",
+  "best_cost": 0.08614574464070206,
+  "last_episode": {
+    "initial_cost": 0.048069342973456206,
+    "final_cost": 0.08987338286552864,
+    "episode_reward": -41.804039001464844,
+    "steps": 133,
+    "invalid_action": null,
+    "wirelength": 5818769.688556844,
+    "density_cost": 0.9532650017222564,
+    "congestion_cost": 0.7681396976990823,
+    "loss": 0.020025569264457296,
+    "policy_loss": -0.026456339819940614,
+    "value_loss": 0.20045445195843167,
+    "entropy": 5.37453195941982,
+    "approx_kl": 0.011502072659891043,
+    "clip_fraction": 0.15391791044776118
+  },
+  "train_runtime_sec": 570.4885154259991
+}

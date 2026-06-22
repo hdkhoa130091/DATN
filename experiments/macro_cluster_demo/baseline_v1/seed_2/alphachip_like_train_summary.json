@@ -1,0 +1,32 @@
+{
+  "model_path": "/workspace/DATN/tmp_rl_macro_cluster_demo_seed_2/alphachip_like_actor_critic.pt",
+  "history_csv": "/workspace/DATN/tmp_rl_macro_cluster_demo_seed_2/alphachip_like_training_history.csv",
+  "episodes": 100,
+  "rollout_episodes": 4,
+  "max_macros": 4,
+  "max_nodes": 2048,
+  "max_edges": 6000,
+  "max_grid": 32,
+  "batch_size": 64,
+  "device": "cpu",
+  "resume_from": null,
+  "stage_name": "",
+  "best_cost": 0.11516620759947817,
+  "last_episode": {
+    "initial_cost": 0.053414571917808205,
+    "final_cost": 0.24471158349641237,
+    "episode_reward": -191.29701232910156,
+    "steps": 4,
+    "invalid_action": null,
+    "wirelength": 71455.78238095241,
+    "density_cost": 0.2542239163905297,
+    "congestion_cost": 0.5666145960482813,
+    "loss": 2971.5023193359375,
+    "policy_loss": -0.0030003925785422325,
+    "value_loss": 5943.1243896484375,
+    "entropy": 5.689593195915222,
+    "approx_kl": -0.002315305173397064,
+    "clip_fraction": 0.0
+  },
+  "train_runtime_sec": 261.8291108839985
+}

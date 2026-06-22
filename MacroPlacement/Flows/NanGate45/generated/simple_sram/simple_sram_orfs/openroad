@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_PATH="${1:-}"
+if [ -z "$SCRIPT_PATH" ]; then
+  echo "usage: ./openroad <script.tcl>" >&2
+  exit 2
+fi
+python3 /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/util/openroad_partition_compat.py "$SCRIPT_PATH"

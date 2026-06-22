@@ -109,7 +109,7 @@ def SortIOPorts(io_list, group_id, distance, direction = "y"):
     return group_id
 
 
-def Grouping(design, n_rows, n_cols, K_in, K_out, setup_file, global_net_threshold, src_dir, openroad_exe):
+def Grouping(design, n_rows, n_cols, K_in, K_out, setup_file, global_net_threshold, src_dir, openroad_exe = "./openroad"):
     pwd = os.getcwd()
     extract_hypergraph_file  = src_dir + "/utils/extract_hypergraph.tcl"
 
@@ -267,5 +267,8 @@ def Grouping(design, n_rows, n_cols, K_in, K_out, setup_file, global_net_thresho
     for vertex in vertices:
         f.write(str(vertex.group_id) + "\n")
     f.close()
+
+    # Legacy MacroPlacement flow expects both <design>.fix and <design>.fix.old.
+    shutil.copyfile(fix_file, fix_file + ".old")
 
     #shutil.rmtree(rpt_dir)

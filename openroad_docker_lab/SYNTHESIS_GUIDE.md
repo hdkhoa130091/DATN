@@ -51,13 +51,13 @@ Một điểm cần phân biệt rõ:
 Script dùng cho mọi thiết kế:
 
 ```text
-openroad_docker_lab/scripts/run_orfs_design.sh
+openroad_docker_lab/scripts/run_orfs.sh
 ```
 
 Cú pháp:
 
 ```bash
-./openroad_docker_lab/scripts/run_orfs_design.sh \
+./openroad_docker_lab/scripts/run_orfs.sh \
   <đường-dẫn-config.mk> [synth|floorplan|place]
 ```
 
@@ -90,7 +90,7 @@ Ví dụ:
 
 ```bash
 JOBS=4 FLOW_VARIANT=run_01 \
-  ./openroad_docker_lab/scripts/run_orfs_design.sh \
+  ./openroad_docker_lab/scripts/run_orfs.sh \
   designs/nangate45/adder_demo/config.mk place
 ```
 
@@ -206,7 +206,7 @@ set_clock_uncertainty 0.1 [get_clocks core_clock]
 Cú pháp:
 
 ```bash
-./openroad_docker_lab/scripts/run_orfs_design.sh \
+./openroad_docker_lab/scripts/run_orfs.sh \
   designs/nangate45/adder_demo/config.mk synth
 ```
 
@@ -240,7 +240,7 @@ openroad_docker_lab/OpenROAD-flow-scripts/flow/
 Không đổi tên hoặc xóa thư mục `results/` khi đang chạy flow vì floorplan cần
 đọc kết quả synthesis và placement cần đọc kết quả floorplan.
 
-Script `run_orfs_design.sh` đồng thời xuất kết quả từng stage sang các thư mục
+Script `run_orfs.sh` đồng thời xuất kết quả từng stage sang các thư mục
 dễ nhận biết hơn:
 
 ```text
@@ -291,7 +291,7 @@ openroad_docker_lab/OpenROAD-flow-scripts/flow/
 Cú pháp:
 
 ```bash
-./openroad_docker_lab/scripts/run_orfs_design.sh \
+./openroad_docker_lab/scripts/run_orfs.sh \
   designs/nangate45/adder_demo/config.mk floorplan
 ```
 
@@ -316,7 +316,7 @@ macro, tap cell và cấu hình mạng nguồn.
 Cú pháp:
 
 ```bash
-./openroad_docker_lab/scripts/run_orfs_design.sh \
+./openroad_docker_lab/scripts/run_orfs.sh \
   designs/nangate45/adder_demo/config.mk place
 ```
 
@@ -412,7 +412,7 @@ Chạy riêng synthesis:
 
 ```bash
 JOBS=1 FLOW_VARIANT=ariane_synth \
-  ./openroad_docker_lab/scripts/run_orfs_design.sh \
+  ./openroad_docker_lab/scripts/run_orfs.sh \
   designs/nangate45/ariane133/config.mk synth
 ```
 
@@ -420,7 +420,7 @@ Chạy đến placement:
 
 ```bash
 JOBS=1 FLOW_VARIANT=ariane_place \
-  ./openroad_docker_lab/scripts/run_orfs_design.sh \
+  ./openroad_docker_lab/scripts/run_orfs.sh \
   designs/nangate45/ariane133/config.mk place
 ```
 

@@ -7,7 +7,24 @@ services:
     container_name: openroad-docker-lab-cli
     stdin_open: true
     tty: true
-    working_dir: /workspace
+    working_dir: /workspace/DATN
     volumes:
-      - .:/workspace
+      - ..:/workspace/DATN
+    command: sleep infinity
+
+  openroad-gui:
+    image: openroad-docker-lab:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openroad-docker-lab-gui
+    stdin_open: true
+    tty: true
+    working_dir: /workspace/DATN
+    environment:
+      DISPLAY: ${DISPLAY}
+    network_mode: host
+    volumes:
+      - ..:/workspace/DATN
+      - /tmp/.X11-unix:/tmp/.X11-unix
     command: bash

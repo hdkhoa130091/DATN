@@ -1,198 +1,334 @@
-# DATN Docker Environment
+# DATN RL Docker Environment
 
-## 1. Kiến trúc mong muốn
+## 1. Docker này dùng để làm gì
 
-### Host
+`datn_docker_env` là Docker environment dành cho phần RL và Python workflow của
+repo DATN.
 
-- chứa repo `DATN`
-- dùng VSCode để code
-- dùng Git để quản lý source
+Mục tiêu chính:
 
-### Docker image
+- chạy code Python trong `rl_macroplacement_agent`
+- train hoặc evaluate agent RL
+- kiểm tra môi trường `torch`, `yosys`, source `DREAMPlace`
+- mount trực tiếp repo DATN từ máy host vào container để không phải rebuild khi
+  chỉ sửa code Python
 
-- chứa OpenROAD
-- chứa Yosys
-- chứa DREAMPlace
-- chứa PyTorch
-- chứa các dependency phục vụ synthesis, placement, RL và evaluation
+## 2. Image này hiện chứa những gì
 
-### Container
+Image được build với tên:
 
-- chạy synthesis
-- chạy placement
-- chạy DREAMPlace
-- chạy RL training
-- chạy evaluation
-- output và log được lưu ra repo DATN trên host
+```text
+datn-openroad-rl:latest
+```
 
-## 2. Vì sao không copy DATN vào image
+Dockerfile hiện tại cài các thành phần sau:
 
-Không copy cứng repo DATN vào image trong giai đoạn phát triển vì:
+- `python3`, `pip`, `venv`
+- tool build cơ bản: `cmake`, `ninja`, `gcc/g++`, `make`, `swig`, `bison`,
+  `flex`
+- thư viện Python cơ bản: `numpy`, `scipy`, `pandas`, `matplotlib`,
+  `networkx`, `tqdm`, `pyyaml`, `tensorboard`, `gymnasium`
+- `torch`, `torchvision`, `torchaudio`
+- `stable-baselines3`
+- `yosys`
+- clone source `DREAMPlace` vào:
 
-- sửa code nhanh hơn
-- không phải rebuild image mỗi lần sửa source
-- output và log nằm trên host nên dễ theo dõi
-- dễ `git commit` ngay trên repo thật
+```text
+/opt/DREAMPlace
+```
 
-Repo DATN sẽ được mount từ host vào container tại:
+Image này hỗ trợ tốt cho:
+
+- chạy script Python/RL
+- kiểm tra mount dữ liệu testcase
+- kiểm tra Yosys
+- kiểm tra source DREAMPlace
+
+Image này **chưa phải** môi trường GPU hoàn chỉnh cho PyTorch CUDA, vì
+Dockerfile hiện tại đang cài:
+
+```text
+https://download.pytorch.org/whl/cpu
+```
+
+Vì vậy:
+
+- container GPU vẫn chạy được với `--gpus all`
+- nhưng `torch.cuda.is_available()` có thể vẫn là `False`
+
+## 3. Vì sao cần `.env`
+
+Repo DATN không được copy cứng vào image. Thay vào đó, repo trên máy host sẽ
+được mount vào container tại:
 
 ```text
 /workspace/DATN
 ```
 
-## 3. Cách setup
+Do đó cần file `.env` để chỉ ra đường dẫn repo DATN trên host.
+
+### Tạo `.env`
 
 ```bash
+cd /path/to/DATN/datn_docker_env
 cp .env.example .env
 ```
 
-Sau đó sửa:
+### Nội dung quan trọng trong `.env`
+
+Biến bắt buộc và thực sự được dùng bởi các script hiện tại là:
 
 ```text
 DATN_PATH=/duong/dan/toi/repo/DATN
 ```
 
-Rồi build:
+Ví dụ:
 
-```bash
-./scripts/build.sh
+```text
+DATN_PATH=/home/khoahd/Documents/DATN-1
 ```
 
-## 4. Cách chạy CPU
+Hai dòng còn lại trong `.env.example`:
 
-```bash
-./scripts/run_cpu.sh
+```text
+IMAGE_NAME=datn-openroad-rl:latest
+CONTAINER_NAME=datn_openroad_rl
 ```
 
-## 5. Cách chạy GPU
+hiện chưa được các script `run_cpu.sh` và `run_gpu.sh` sử dụng trực tiếp.
+
+## 4. Quy trình build và chạy
+
+### Bước 1. Build image
 
 ```bash
-./scripts/run_gpu.sh
+cd /path/to/DATN
+./datn_docker_env/scripts/build.sh
 ```
 
-Lưu ý:
+Build log được lưu tại:
 
-- host cần có NVIDIA driver
-- host cần có NVIDIA Container Toolkit
-- container cần chạy với `--gpus all`
+```text
+datn_docker_env/logs/build.log
+```
 
-## 6. Cách chạy GUI
-
-Trên host:
+### Bước 3. Chạy container GPU
 
 ```bash
-xhost +local:docker
-./scripts/run_gui_x11.sh
+./datn_docker_env/scripts/run_gpu.sh
 ```
 
-Trong container:
+Container tạm thời này chạy với tên:
+
+```text
+datn_openroad_rl_gpu
+```
+
+Điều kiện để chạy bản GPU:
+
+- host có NVIDIA driver
+- host có NVIDIA Container Toolkit
+- Docker hỗ trợ `--gpus all`
+### Option: Chạy container CPU-based
+Nếu không hỗ trợ card đồ họa GPU cho ứng dụng học tăng cường thì có thể chạy bằng CPU
+
+Ưu điểm: 
+- Tiện lợi cho tất cả các loại mấy tính
+
+Nhược điểm: 
+- "Ngốn" RAM, trong khi RAM nên được dùng để mở và chạy OpenROAD đối với nghiên cứu này
+            
+- Chậm hơn nhiều, performance thấp hơn nhiều so với 
+```bash
+./datn_docker_env/scripts/run_cpu.sh
+```
+
+Container tạm thời này chạy với tên:
+
+```text
+datn_openroad_rl_cpu
+```
+## 5. Docker này hỗ trợ những workflow nào
+
+### Workflow phù hợp
+
+- train RL bằng Python
+- evaluate policy/model
+- chạy các script trong `rl_macroplacement_agent/scripts`
+- kiểm tra feature extraction, rollout logic, PPO code
+- kiểm tra mount dữ liệu trong repo DATN
+- chạy test Yosys đơn giản
+
+### Workflow không nên kỳ vọng từ Docker này
+
+- full OpenROAD flow
+- ORFS hoàn chỉnh
+- GUI OpenROAD
+- PyTorch CUDA chắc chắn hoạt động ngay từ lần build đầu
+
+## 6. Test Docker thì cần thỏa mãn những gì
+
+Một lần test hợp lệ cho Docker RL nên xác nhận được 4 nhóm điều kiện:
+
+### 1. Python environment hoạt động
+
+Container cần chạy được:
+
+- `python3`
+- `pip`
+- import `torch`
+
+### 2. Repo DATN được mount đúng
+
+Trong container phải nhìn thấy:
+
+- `MacroPlacement/`
+- `rl_macroplacement_agent/`
+- `tools/`
+
+và các file testcase như `.plc`, `.sdc`, `.lef`, `.lib` phải tìm được từ
+`/workspace/DATN`.
+
+### 3. Yosys hoạt động
+
+Container phải chạy được một test Yosys nhỏ, ví dụ synth adder đơn giản và ghi
+ra `netlist.v`.
+
+### 4. DREAMPlace source tồn tại
+
+Container phải nhìn thấy source ở:
+
+```text
+/opt/DREAMPlace
+```
+
+Lưu ý: nhìn thấy source **không có nghĩa** DREAMPlace đã build xong.
+
+### 5. GPU test chỉ pass khi nào
+
+Nếu bạn chạy container GPU, test GPU chỉ được xem là pass hoàn toàn khi:
+
+- `nvidia-smi` chạy được trong container
+- `torch.cuda.is_available()` trả về `True`
+
+Nếu `nvidia-smi` có nhưng `torch.cuda.is_available()` vẫn là `False` thì
+container mới chỉ pass phần mount GPU ở mức Docker, chưa pass phần PyTorch CUDA.
+
+## 7. Các script test và ý nghĩa
+
+Sau khi vào container:
 
 ```bash
-xeyes
-openroad -gui
+cd /workspace/DATN/datn_docker_env
 ```
 
-## 7. Cách test
-
-### Trên host
-
-```bash
-./scripts/test_host.sh
-```
-
-### Sau khi vào container
+### Test tổng quát container
 
 ```bash
 ./scripts/test_container.sh
-./scripts/test_gpu.sh
-./scripts/test_yosys.sh
-./scripts/test_openroad.sh
-./scripts/test_dreamplace.sh
+```
+
+Xác nhận:
+
+- Python
+- pip
+- git
+- cmake
+- ninja
+- yosys
+- biến `DREAMPLACE_HOME`
+- mount `/workspace/DATN`
+
+### Test mount repo DATN
+
+```bash
 ./scripts/test_datn_mount.sh
 ```
 
-## 8. Giải thích Docker
+Xác nhận:
 
-- `image` là môi trường đóng gói sẵn
-- `container` là một phiên chạy cụ thể từ image
+- repo mount đúng
+- nhìn thấy các thư mục quan trọng
+- tìm được input như `netlist.pb.txt`, `.plc`, `.sdc`, `.lef`, `.lib`
 
-Trong project này:
-
-- image chứa tool và dependency
-- container mount repo DATN từ host để chạy code thật
-
-## 9. Ghi chú về OpenROAD
-
-Dockerfile hiện ưu tiên:
-
-1. thử cài `openroad` từ apt nếu có
-2. nếu không có thì clone `OpenROAD-flow-scripts` vào `/opt/OpenROAD-flow-scripts`
-3. không tự build OpenROAD từ source ở bước này
-
-Biến môi trường:
-
-```text
-ORFS_HOME=/opt/OpenROAD-flow-scripts
-```
-
-Nếu `openroad` chưa có trong image, bạn sẽ thấy thông báo rõ trong:
+### Test Yosys
 
 ```bash
-./scripts/test_openroad.sh
+./scripts/test_yosys.sh
 ```
 
-## 10. Ghi chú về DREAMPlace
+Xác nhận:
 
-Dockerfile hiện:
+- Yosys chạy được
+- pass `abc`
+- ghi được `netlist.v`
 
-- clone source DREAMPlace vào `/opt/DREAMPlace`
-- không tự build vì còn phụ thuộc tương thích CUDA, PyTorch, GCC, CMake
+### Test DREAMPlace
 
-Biến môi trường:
-
-```text
-DREAMPLACE_HOME=/opt/DREAMPlace
+```bash
+./scripts/test_dreamplace.sh
 ```
 
-Nếu DREAMPlace chưa build, script test sẽ báo rõ:
+Xác nhận:
 
-```text
-DREAMPlace source có thể đã clone nhưng chưa build. Cần build đúng CUDA/PyTorch/GCC/CMake.
+- source `DREAMPlace` đã được clone
+- `torch` import được
+
+### Test GPU
+
+```bash
+./scripts/test_gpu.sh
 ```
 
-## 11. Giải thích lỗi thường gặp
+Xác nhận:
 
-### Docker không chạy được
+- `nvidia-smi`
+- `torch.cuda.is_available()`
+- số lượng GPU và tên GPU nếu CUDA thực sự hoạt động
 
-Hãy kiểm tra:
+## 8. Quy trình test khuyến nghị
 
-- Docker daemon đã chạy chưa
-- user đã nằm trong group `docker` chưa
-- nếu vừa thêm vào group `docker`, cần đăng xuất/đăng nhập lại
+### Kiểm tra trên host trước
 
-### `openroad command not found`
+```bash
+cd /path/to/DATN/datn_docker_env
+./scripts/test_host.sh
+```
 
-Điều này nghĩa là image chưa có binary OpenROAD sẵn. Khi đó cần:
+### Kiểm tra trong container CPU
 
-- dùng prebuilt image phù hợp
-- cài package nếu có
-- hoặc build OpenROAD / ORFS ở bước sau
+```bash
+./scripts/run_cpu.sh
+cd /workspace/DATN/datn_docker_env
+./scripts/test_container.sh
+./scripts/test_datn_mount.sh
+./scripts/test_yosys.sh
+./scripts/test_dreamplace.sh
+```
 
-### `torch.cuda.is_available() == False`
+### Kiểm tra trong container GPU
 
-Các nguyên nhân phổ biến:
+```bash
+./scripts/run_gpu.sh
+cd /workspace/DATN/datn_docker_env
+./scripts/test_container.sh
+./scripts/test_gpu.sh
+./scripts/test_dreamplace.sh
+```
 
-- đang cài PyTorch CPU-only
-- container chưa chạy với `--gpus all`
-- host thiếu NVIDIA Container Toolkit
-- driver và CUDA không tương thích
+## 9. Kết luận ngắn
 
-### `cannot connect to display`
+Docker này nên được hiểu là:
 
-Các nguyên nhân phổ biến:
+- một Python/RL container cho DATN
+- có Yosys
+- có source DREAMPlace
+- mount repo DATN để chạy code thật
 
-- chưa chạy `xhost +local:docker`
-- chưa truyền `DISPLAY`
-- chưa mount `/tmp/.X11-unix`
-- host đang dùng Wayland nhưng XWayland chưa hoạt động
+Nó chưa nên được xem là:
 
+- full OpenROAD container
+- guaranteed CUDA training container
+
+Nếu mục tiêu tiếp theo của bạn là train RL bằng GPU thật trong Docker, bước hợp
+lý tiếp theo là sửa `Dockerfile` sang base CUDA và cài PyTorch CUDA tương ứng.

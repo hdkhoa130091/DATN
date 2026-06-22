@@ -1,0 +1,32 @@
+{
+  "model_path": "experiments/ariane133_study/A_seed_3/alphachip_like_actor_critic.pt",
+  "history_csv": "experiments/ariane133_study/A_seed_3/alphachip_like_training_history.csv",
+  "episodes": 20,
+  "rollout_episodes": 4,
+  "max_macros": 133,
+  "max_nodes": 1024,
+  "max_edges": 4000,
+  "max_grid": 32,
+  "batch_size": 1,
+  "device": "cpu",
+  "resume_from": null,
+  "stage_name": "",
+  "best_cost": 0.08720920793828853,
+  "last_episode": {
+    "initial_cost": 0.048069342973456206,
+    "final_cost": 0.0911831151255699,
+    "episode_reward": -43.113773345947266,
+    "steps": 133,
+    "invalid_action": null,
+    "wirelength": 5903567.101671426,
+    "density_cost": 0.9324771091619958,
+    "congestion_cost": 0.7777349469303586,
+    "loss": 0.76375327518742,
+    "policy_loss": -0.009166942142594354,
+    "value_loss": 1.6539517320093426,
+    "entropy": 5.405564977934486,
+    "approx_kl": 0.04479433058347917,
+    "clip_fraction": 0.31954887218045114
+  },
+  "train_runtime_sec": 1628.8988652339995
+}

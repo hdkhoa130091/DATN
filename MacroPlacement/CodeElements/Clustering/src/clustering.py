@@ -31,7 +31,7 @@ class Clustering:
     def __init__(self, design, src_dir, fixed_file, n_cols = 27, n_rows = 23,
                  global_net_threshold = 500,
                  Nparts = 500, setup_file = "setup.tcl",
-                 openroad_exe = "openroad"):
+                 openroad_exe = "openroad", *legacy_args):
         """
         parameter: design,  help="design_name: ariane, MegaBoom_x2 ", type = str
         parameter: src_dir, help="directory for source codes", type = str
@@ -45,6 +45,30 @@ class Clustering:
         self.design = design
         self.src_dir = src_dir
         self.fixed_file = fixed_file
+        self.legacy_mode = False
+        self.legacy_grid_width = 0.0
+        self.legacy_step_threshold = None
+        self.legacy_distance = None
+
+        # Backward-compatible argument shuffle for MacroPlacement/Flows/util/flow.py.
+        if isinstance(n_cols, float):
+            self.legacy_mode = True
+            self.legacy_step_threshold = n_cols
+            self.legacy_distance = n_rows
+            self.legacy_grid_width = global_net_threshold
+            legacy_global_net_threshold = setup_file
+            legacy_nparts = openroad_exe
+            legacy_setup_file = legacy_args[0] if len(legacy_args) > 0 else "setup.tcl"
+            # Legacy caller also passes output_dir and Replace after setup_file.
+            # They are no longer needed by the current implementation.
+            _legacy_output_dir = legacy_args[1] if len(legacy_args) > 1 else None
+            _legacy_replace = legacy_args[2] if len(legacy_args) > 2 else None
+            n_cols = 27
+            n_rows = 23
+            global_net_threshold = legacy_global_net_threshold
+            Nparts = legacy_nparts
+            setup_file = legacy_setup_file
+            openroad_exe = "./openroad"
         self.merge_threshold = 0.0
         self.breakup_threshold = 0.0
         self.closeness = 0.0
@@ -181,9 +205,16 @@ class Clustering:
         self.floorplan_width = canvas_width
         self.floorplan_height = canvas_height
 
-        self.breakup_threshold = sqrt(canvas_width * canvas_height / 16.0)
-        self.closeness = self.breakup_threshold / 2.0
-        self.soft_macro_width = canvas_width / self.n_cols
+        if self.legacy_mode and self.legacy_grid_width > 0.0:
+            self.n_cols = max(1, int(round(canvas_width / self.legacy_grid_width)))
+            self.n_rows = max(1, int(round(canvas_height / self.legacy_grid_width)))
+            self.breakup_threshold = self.legacy_step_threshold
+            self.closeness = self.legacy_distance
+            self.soft_macro_width = self.legacy_grid_width
+        else:
+            self.breakup_threshold = sqrt(canvas_width * canvas_height / 16.0)
+            self.closeness = self.breakup_threshold / 2.0
+            self.soft_macro_width = canvas_width / self.n_cols
 
         self.fixed_group_id = -1
         with open(self.fixed_file) as f:
@@ -622,5 +653,3 @@ class Clustering:
         f.write("# STDCELLs        :        0\n")
         f.write(line)
         f.close()
-
-

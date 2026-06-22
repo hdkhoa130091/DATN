@@ -7,6 +7,10 @@ LOG_FILE="${LOG_DIR}/container_tools.log"
 mkdir -p "${LOG_DIR}"
 
 {
+  echo "=== make --version ==="
+  make --version | head -n 1
+  echo
+
   echo "=== yosys -V ==="
   yosys -V
   echo
@@ -15,16 +19,36 @@ mkdir -p "${LOG_DIR}"
   yosys-abc -h | head -n 5 || true
   echo
 
-  echo "=== abc -h ==="
-  abc -h | head -n 5 || true
+  echo "=== abc check ==="
+  if command -v abc >/dev/null 2>&1; then
+    abc -h | head -n 5 || true
+  else
+    echo "abc not found on PATH"
+  fi
   echo
 
   echo "=== openroad -version ==="
   openroad -version
   echo
 
-  echo "=== klayout -v ==="
-  klayout -v || true
+  echo "=== tclsh patchlevel ==="
+  tclsh <<< 'puts [info patchlevel]'
+  echo
+
+  echo "=== klayout -b -v ==="
+  klayout -b -v || true
+  echo
+
+  echo "=== xauth -V ==="
+  xauth -V || true
+  echo
+
+  echo "=== DISPLAY check ==="
+  if [ -n "${DISPLAY:-}" ]; then
+    echo "DISPLAY=${DISPLAY}"
+  else
+    echo "DISPLAY is not set"
+  fi
   echo
 
   echo "=== python3 --version ==="

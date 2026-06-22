@@ -273,6 +273,20 @@ class GriddingLefDefInterface:
                  halo_width = 0.05, openroad_exe = "./openroad", min_n_rows = 10, min_n_cols = 10, max_n_rows = 128,
                  max_n_cols = 128, max_rows_times_cols = 2500,  min_rows_times_cols = 500,
                  max_aspect_ratio = 1.5):
+        # Backward-compatible argument shuffle for MacroPlacement/Flows/util/flow.py,
+        # which calls this class without passing openroad_exe explicitly.
+        if not isinstance(openroad_exe, str):
+            legacy_min_n_rows = openroad_exe
+            legacy_min_n_cols = min_n_rows
+            legacy_max_n_rows = min_n_cols
+            legacy_max_n_cols = max_n_rows
+            legacy_max_rows_times_cols = max_n_cols
+            openroad_exe = "./openroad"
+            min_n_rows = legacy_min_n_rows
+            min_n_cols = legacy_min_n_cols
+            max_n_rows = legacy_max_n_rows
+            max_n_cols = legacy_max_n_cols
+            max_rows_times_cols = legacy_max_rows_times_cols
         self.src_dir = src_dir
         self.design = design
         self.setup_file = setup_file
@@ -366,7 +380,6 @@ class GriddingLefDefInterface:
 
         rpt_dir = os.getcwd() + "/rtl_mp"
         shutil.rmtree(rpt_dir)
-
 
 
 

@@ -2,11 +2,11 @@
 
 Thư mục này giữ lại phần lõi của flow RL hiện tại:
 
-- `alphachip_like_features.py`: tạo observation/state từ `netlist.pb.txt` và `.plc`
-- `alphachip_like_model.py`: actor-critic graph-based
-- `alphachip_like_agent.py`: PPO update, GAE, loss
-- `train_alphachip_like_ppo.py`: train
-- `evaluate_alphachip_like_policy.py`: chạy policy đã train và lưu `.plc`
+- `obs_features.py`: tạo observation/state từ `netlist.pb.txt` và `.plc`
+- `policy_model.py`: actor-critic graph-based
+- `ppo_agent.py`: PPO update, GAE, loss
+- `train_ppo.py`: train
+- `eval_policy.py`: chạy policy đã train và lưu `.plc`
 - `eval_proxy.py`: đo proxy cost từ `PlacementCost`
 - `plc_to_openroad_tcl.py`: đổi `.plc` sang Tcl để xem/eval trong OpenROAD
 - `run_dreamplace_baseline.py`: baseline DREAMPlace
@@ -17,7 +17,7 @@ Thư mục này giữ lại phần lõi của flow RL hiện tại:
 Flow train/eval hiện tại cần:
 
 - `MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt`
-- `MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc`
+- `MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial_safe.plc`
 
 Tùy chọn để đối chiếu:
 
@@ -40,7 +40,71 @@ bash rl_macroplacement_agent/scripts/install_dreamplace.sh
 
 Script này tự dò CUDA. Có GPU/CUDA thì build bản GPU, không có thì build CPU bình thường.
 
-## Train AlphaChip-like PPO
+## Chạy tay tối thiểu cho ariane133
+
+Nếu chưa có `initial_safe.plc`, tạo một lần:
+
+```bash
+python openroad_docker_lab/scripts/fix_plc.py \
+  --input MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --output MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial_safe.plc \
+  --margin_grid_cells 1
+```
+
+Chạy train seed 1:
+
+```bash
+mkdir -p experiments/ariane133_safe/seed_1
+
+python rl_macroplacement_agent/scripts/train_ppo.py \
+  --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
+  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial_safe.plc \
+  --out_dir experiments/ariane133_safe/seed_1 \
+  --episodes 20 \
+  --rollout_episodes 4 \
+  --max_macros 133 \
+  --max_nodes 1024 \
+  --max_edges 4000 \
+  --max_grid 32 \
+  --batch_size 1 \
+  --seed 1 \
+  --device cuda | tee experiments/ariane133_safe/seed_1/train.log
+```
+
+Đổi `seed_1` thành `seed_2`, `seed_3` và đổi `--seed` tương ứng để có nhiều lần chạy.
+
+Đọc kết quả:
+
+```bash
+cat experiments/ariane133_safe/seed_1/alphachip_like_train_summary.json
+```
+
+So sánh 3 seed:
+
+```bash
+python - <<'PY'
+import json
+from pathlib import Path
+
+for p in sorted(Path("experiments/ariane133_safe").glob("seed_*/alphachip_like_train_summary.json")):
+    data = json.loads(p.read_text())
+    init_cost = data["last_episode"]["initial_cost"]
+    best_cost = data["best_cost"]
+    final_cost = data["last_episode"]["final_cost"]
+    best_improve = (init_cost - best_cost) / init_cost * 100
+    print(p.parent.name, "best_improve =", f"{best_improve:.4f}%")
+    print("  initial_cost =", init_cost)
+    print("  best_cost    =", best_cost)
+    print("  final_cost   =", final_cost)
+    print("  wirelength   =", data["last_episode"]["wirelength"])
+    print("  density_cost =", data["last_episode"]["density_cost"])
+    print("  congestion   =", data["last_episode"]["congestion_cost"])
+PY
+```
+
+Nếu `best_cost < initial_cost` thì seed đó đã chứng minh RL tìm được placement tốt hơn placement ban đầu.
+
+## Train PPO
 
 Trên máy GPU, sau khi kích hoạt `rl_env`, có thể dùng script cấu hình sẵn để
 giảm VRAM:
@@ -48,7 +112,7 @@ giảm VRAM:
 ```bash
 source rl_env/bin/activate
 EPISODES=10 ROLLOUT_EPISODES=2 BATCH_SIZE=1 MAX_EDGES=4000 \
-  ./rl_macroplacement_agent/scripts/run_ariane133_ppo.sh
+  ./rl_macroplacement_agent/scripts/run_ariane133.sh
 ```
 
 Các biến `EPISODES`, `ROLLOUT_EPISODES`, `BATCH_SIZE`, `MAX_NODES`,
@@ -58,9 +122,9 @@ trực tiếp trước lệnh.
 Hoặc gọi Python thủ công:
 
 ```bash
-python rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py \
+python rl_macroplacement_agent/scripts/train_ppo.py \
   --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
-  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial_safe.plc \
   --out_dir rl_macroplacement_agent/results/ariane133_ng45/alphachip_like/train \
   --episodes 10 \
   --rollout_episodes 4 \
@@ -74,10 +138,10 @@ python rl_macroplacement_agent/scripts/train_alphachip_like_ppo.py \
 ## Evaluate policy
 
 ```bash
-python rl_macroplacement_agent/scripts/evaluate_alphachip_like_policy.py \
+python rl_macroplacement_agent/scripts/eval_policy.py \
   --model rl_macroplacement_agent/results/ariane133_ng45/alphachip_like/train/alphachip_like_actor_critic.pt \
   --netlist MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt \
-  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial.plc \
+  --init_plc MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/initial_safe.plc \
   --out_dir rl_macroplacement_agent/results/ariane133_ng45/alphachip_like/eval \
   --max_macros 5 \
   --max_nodes 1024 \
@@ -130,7 +194,7 @@ python rl_macroplacement_agent/scripts/plc_to_openroad_tcl.py \
 
 Nên tập trung vào:
 
-- `alphachip_like_*`
+- `train_ppo.py`, `eval_policy.py`, `ppo_agent.py`, `policy_model.py`, `obs_features.py`
 - `eval_proxy.py`
 - `convert_bookshelf_pl_to_plc.py`
 - `run_dreamplace_baseline.py`

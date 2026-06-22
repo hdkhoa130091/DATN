@@ -4,22 +4,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-lc"]
 
 ARG OSS_CAD_SUITE_URL="https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2026-04-21/oss-cad-suite-linux-x64-20260421.tgz"
-ARG BAZELISK_VERSION="1.28.1"
-ARG OPENROAD_REF="master"
+ARG OPENROAD_DEB_URL="https://github.com/Precision-Innovations/OpenROAD/releases/download/2024-12-14/openroad_2.0-17598-ga008522d8_amd64-ubuntu-22.04.deb"
+ARG ORFS_REF="9f231560d3c024ff58eb7943c0906caa393eef95"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      build-essential \
       git \
-      cmake \
-      ninja-build \
       python3 \
       python3-pip \
-      tcl \
-      pkg-config \
       curl \
       wget \
       ca-certificates \
+      make \
       xauth \
       x11-apps \
       libx11-6 \
@@ -34,16 +30,8 @@ RUN apt-get update && \
       libglu1-mesa \
       mesa-utils \
       graphviz \
-      make \
-      bison \
-      flex \
-      swig \
-      zip \
-      unzip \
       python3-venv \
-      python3-dev \
-      libboost-all-dev \
-      openjdk-21-jre-headless \
+      tcl \
       locales && \
     locale-gen en_US.UTF-8 && \
     update-ca-certificates
@@ -63,18 +51,17 @@ RUN mkdir -p /opt/oss-cad-suite && \
     ln -sf /opt/oss-cad-suite/bin/yosys-abc /usr/local/bin/yosys-abc && \
     ln -sf /opt/oss-cad-suite/bin/yosys-abc /usr/local/bin/abc
 
-RUN curl -fL "https://github.com/bazelbuild/bazelisk/releases/download/v${BAZELISK_VERSION}/bazelisk-linux-amd64" \
-      -o /usr/local/bin/bazelisk && \
-    chmod +x /usr/local/bin/bazelisk && \
-    ln -sf /usr/local/bin/bazelisk /usr/local/bin/bazel
+RUN curl -fL --retry 8 --retry-delay 5 --retry-all-errors "${OPENROAD_DEB_URL}" -o /tmp/openroad.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends /tmp/openroad.deb && \
+    rm -f /tmp/openroad.deb && \
+    ln -sf /usr/bin/openroad /usr/local/bin/openroad
 
-RUN git clone --recursive --depth 1 --branch "${OPENROAD_REF}" \
-      https://github.com/The-OpenROAD-Project/OpenROAD.git /opt/OpenROAD-src && \
-    cd /opt/OpenROAD-src && \
-    bazelisk run --config=release --//:platform=gui //:install -- /opt/OpenROAD-install && \
-    ln -sf /opt/OpenROAD-install/openroad /usr/local/bin/openroad
-
-RUN git clone --depth 1 https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git /opt/OpenROAD-flow-scripts || true
+RUN git init /opt/OpenROAD-flow-scripts && \
+    cd /opt/OpenROAD-flow-scripts && \
+    git remote add origin https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts.git && \
+    git fetch --depth 1 origin "${ORFS_REF}" && \
+    git checkout FETCH_HEAD
 
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/*

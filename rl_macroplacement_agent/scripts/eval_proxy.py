@@ -10,6 +10,7 @@ from path_utils import add_repo_paths
 add_repo_paths()
 
 from plc_client_os import PlacementCost
+from train_ppo import get_proxy_cost
 
 
 def safe_call(name, fn):
@@ -24,6 +25,9 @@ def main() -> int:
     parser.add_argument("--netlist", required=True, help="Path to netlist.pb.txt")
     parser.add_argument("--plc", required=True, help="Path to placement .plc file")
     parser.add_argument("--out", required=True, help="Path to write result JSON")
+    parser.add_argument("--wirelength_weight", type=float, default=1.0)
+    parser.add_argument("--density_weight", type=float, default=0.5)
+    parser.add_argument("--congestion_weight", type=float, default=0.5)
     args = parser.parse_args()
 
     netlist_path = Path(args.netlist)
@@ -59,10 +63,20 @@ def main() -> int:
         "macro_indices_count": len(plc.get_macro_indices()),
     }
 
-    result.update(safe_call("cost", plc.get_cost))
+    proxy_cost, components = get_proxy_cost(
+        plc,
+        wirelength_weight=args.wirelength_weight,
+        density_weight=args.density_weight,
+        congestion_weight=args.congestion_weight,
+    )
+    result["proxy_cost"] = proxy_cost
+    result["wirelength_weight"] = args.wirelength_weight
+    result["density_weight"] = args.density_weight
+    result["congestion_weight"] = args.congestion_weight
     result.update(safe_call("wirelength", plc.get_wirelength))
-    result.update(safe_call("density_cost", plc.get_density_cost))
-    result.update(safe_call("congestion_cost", plc.get_congestion_cost))
+    result["wirelength_cost"] = components["wirelength_cost"]
+    result["density_cost"] = components["density_cost"]
+    result["congestion_cost"] = components["congestion_cost"]
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")

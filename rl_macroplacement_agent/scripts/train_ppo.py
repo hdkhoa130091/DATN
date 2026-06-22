@@ -114,6 +114,33 @@ def format_seconds(seconds: float) -> str:
     return f"{minutes:02d}:{secs:04.1f}"
 
 
+def get_proxy_cost(
+    plc: PlacementCost,
+    *,
+    wirelength_weight: float = 1.0,
+    density_weight: float = 0.5,
+    congestion_weight: float = 0.5,
+) -> tuple[float, dict[str, float | dict[str, str]]]:
+    """Match the default MacroPlacement proxy cost used by Circuit Training."""
+    wirelength = safe_metric(plc.get_cost)
+    density = safe_metric(plc.get_density_cost)
+    congestion = safe_metric(plc.get_congestion_cost)
+
+    proxy_cost = 0.0
+    if not isinstance(wirelength, dict):
+        proxy_cost += wirelength_weight * float(wirelength)
+    if not isinstance(density, dict):
+        proxy_cost += density_weight * float(density)
+    if not isinstance(congestion, dict):
+        proxy_cost += congestion_weight * float(congestion)
+
+    return proxy_cost, {
+        "wirelength_cost": wirelength,
+        "density_cost": density,
+        "congestion_cost": congestion,
+    }
+
+
 def create_plc(netlist: str, init_plc: str) -> PlacementCost:
     plc = PlacementCost(netlist)
     plc.restore_placement(
@@ -137,6 +164,9 @@ def collect_episode(
     max_grid: int,
     max_macros: int,
     reward_scale: float,
+    wirelength_weight: float,
+    density_weight: float,
+    congestion_weight: float,
     deterministic: bool = False,
     plc: PlacementCost | None = None,
     extractor: AlphaChipLikeFeatureExtractor | None = None,
@@ -175,13 +205,19 @@ def collect_episode(
     step_rows: list[dict] = []
     invalid_action = None
 
-    initial_cost = float(plc.get_cost())
+    initial_cost, initial_components = get_proxy_cost(
+        plc,
+        wirelength_weight=wirelength_weight,
+        density_weight=density_weight,
+        congestion_weight=congestion_weight,
+    )
     # Match Circuit Training's episode reset semantics: all movable nodes are
     # unplaced before hard-macro placement begins. Otherwise macros that are due
     # to be placed later remain at their initial locations and incorrectly block
     # the action mask, which can make larger episodes infeasible.
     plc.unplace_all_nodes()
     final_cost = initial_cost
+    final_components = initial_components
     episode_start = time.perf_counter()
     total_steps = len(macros)
 
@@ -210,7 +246,7 @@ def collect_episode(
                     "padded_action": None,
                     "real_action": None,
                     "valid": 0,
-                    "cost": final_cost,
+                    "proxy_cost": final_cost,
                     "reward": rewards[step_idx],
                 }
             )
@@ -219,7 +255,7 @@ def collect_episode(
                 print(
                     f"[train] episode {episode_idx + 1 if episode_idx is not None else '?'} "
                     f"step {step_idx + 1}/{total_steps} | invalid_mask | "
-                    f"cost={final_cost:.6f} | elapsed={format_seconds(elapsed)}",
+                    f"proxy_cost={final_cost:.6f} | elapsed={format_seconds(elapsed)}",
                     flush=True,
                 )
             break
@@ -253,7 +289,7 @@ def collect_episode(
                     "padded_action": padded_action,
                     "real_action": real_action,
                     "valid": 0,
-                    "cost": final_cost,
+                    "proxy_cost": final_cost,
                     "reward": rewards[step_idx],
                 }
             )
@@ -263,7 +299,12 @@ def collect_episode(
         plc.FLAG_UPDATE_WIRELENGTH = True
         plc.FLAG_UPDATE_DENSITY = True
         plc.FLAG_UPDATE_CONGESTION = True
-        final_cost = float(plc.get_cost())
+        final_cost, final_components = get_proxy_cost(
+            plc,
+            wirelength_weight=wirelength_weight,
+            density_weight=density_weight,
+            congestion_weight=congestion_weight,
+        )
         step_rows.append(
             {
                 "step": step_idx + 1,
@@ -271,7 +312,7 @@ def collect_episode(
                 "padded_action": padded_action,
                 "real_action": real_action,
                 "valid": 1,
-                "cost": final_cost,
+                "proxy_cost": final_cost,
                 "reward": 0.0,
             }
         )
@@ -289,7 +330,7 @@ def collect_episode(
             print(
                 f"[train] episode {episode_idx + 1 if episode_idx is not None else '?'} "
                 f"step {step_idx + 1}/{total_steps} | "
-                f"cost={final_cost:.6f} | elapsed={format_seconds(elapsed)}",
+                f"proxy_cost={final_cost:.6f} | elapsed={format_seconds(elapsed)}",
                 flush=True,
             )
 
@@ -321,8 +362,9 @@ def collect_episode(
         "steps": used_len,
         "invalid_action": invalid_action,
         "wirelength": safe_metric(plc.get_wirelength),
-        "density_cost": safe_metric(plc.get_density_cost),
-        "congestion_cost": safe_metric(plc.get_congestion_cost),
+        "wirelength_cost": final_components["wirelength_cost"],
+        "density_cost": final_components["density_cost"],
+        "congestion_cost": final_components["congestion_cost"],
         "episode_runtime_sec": time.perf_counter() - episode_start,
     }
     return batch, summary, step_rows, None
@@ -340,6 +382,9 @@ def main() -> int:
     parser.add_argument("--max_edges", type=int, default=10000)
     parser.add_argument("--max_grid", type=int, default=32)
     parser.add_argument("--reward_scale", type=float, default=1000.0)
+    parser.add_argument("--wirelength_weight", type=float, default=1.0)
+    parser.add_argument("--density_weight", type=float, default=0.5)
+    parser.add_argument("--congestion_weight", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume_from", help="Optional actor-critic checkpoint to continue from.")
     parser.add_argument("--stage_name", default="")
@@ -448,6 +493,9 @@ def main() -> int:
             max_grid=args.max_grid,
             max_macros=args.max_macros,
             reward_scale=args.reward_scale,
+            wirelength_weight=args.wirelength_weight,
+            density_weight=args.density_weight,
+            congestion_weight=args.congestion_weight,
             plc=rollout_plc,
             extractor=rollout_extractor,
             progress_every_steps=args.log_every_steps,
@@ -518,6 +566,9 @@ def main() -> int:
         "max_nodes": args.max_nodes,
         "max_edges": args.max_edges,
         "max_grid": args.max_grid,
+        "wirelength_weight": args.wirelength_weight,
+        "density_weight": args.density_weight,
+        "congestion_weight": args.congestion_weight,
         "batch_size": args.batch_size,
         "learning_rate": args.learning_rate,
         "entropy_coef": args.entropy_coef,

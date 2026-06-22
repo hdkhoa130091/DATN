@@ -23,6 +23,20 @@ Tùy chọn để đối chiếu:
 
 - `MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/legalized.plc`
 
+## Cost đang tối ưu
+
+Flow PPO hiện tại tối ưu đúng theo proxy cost mặc định của MacroPlacement:
+
+```text
+proxy_cost = 1.0 * wirelength_cost + 0.5 * density_cost + 0.5 * congestion_cost
+```
+
+Ba weight này có thể đổi trực tiếp bằng:
+
+- `--wirelength_weight`
+- `--density_weight`
+- `--congestion_weight`
+
 ## Setup
 
 ```bash
@@ -66,6 +80,9 @@ python rl_macroplacement_agent/scripts/train_ppo.py \
   --max_nodes 1024 \
   --max_edges 4000 \
   --max_grid 32 \
+  --wirelength_weight 1.0 \
+  --density_weight 0.5 \
+  --congestion_weight 0.5 \
   --batch_size 1 \
   --seed 1 \
   --device cuda | tee experiments/ariane133_safe/seed_1/train.log
@@ -116,7 +133,8 @@ EPISODES=10 ROLLOUT_EPISODES=2 BATCH_SIZE=1 MAX_EDGES=4000 \
 ```
 
 Các biến `EPISODES`, `ROLLOUT_EPISODES`, `BATCH_SIZE`, `MAX_NODES`,
-`MAX_EDGES`, `MAX_GRID`, `MAX_MACROS`, `DEVICE` và `OUT_DIR` đều có thể đổi
+`MAX_EDGES`, `MAX_GRID`, `MAX_MACROS`, `WIRELENGTH_WEIGHT`,
+`DENSITY_WEIGHT`, `CONGESTION_WEIGHT`, `DEVICE` và `OUT_DIR` đều có thể đổi
 trực tiếp trước lệnh.
 
 Hoặc gọi Python thủ công:

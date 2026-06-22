@@ -13,6 +13,9 @@ MAX_NODES="${MAX_NODES:-1024}"
 MAX_EDGES="${MAX_EDGES:-4000}"
 MAX_GRID="${MAX_GRID:-32}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
+WIRELENGTH_WEIGHT="${WIRELENGTH_WEIGHT:-1.0}"
+DENSITY_WEIGHT="${DENSITY_WEIGHT:-0.5}"
+CONGESTION_WEIGHT="${CONGESTION_WEIGHT:-0.5}"
 OUT_DIR="${OUT_DIR:-rl_macroplacement_agent/results/ariane133_ng45/alphachip_like/train}"
 
 NETLIST="MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping/netlist.pb.txt"
@@ -41,6 +44,9 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
   --max_nodes "${MAX_NODES}" \
   --max_edges "${MAX_EDGES}" \
   --max_grid "${MAX_GRID}" \
+  --wirelength_weight "${WIRELENGTH_WEIGHT}" \
+  --density_weight "${DENSITY_WEIGHT}" \
+  --congestion_weight "${CONGESTION_WEIGHT}" \
   --batch_size "${BATCH_SIZE}" \
   --device "${DEVICE}"
 

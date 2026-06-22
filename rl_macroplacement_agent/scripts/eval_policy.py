@@ -12,7 +12,13 @@ import torch
 
 from obs_features import AlphaChipLikeFeatureExtractor, AlphaChipLikeObservationConfig
 from policy_model import AlphaChipLikeActorCritic, AlphaChipLikeModelConfig
-from train_ppo import create_plc, obs_to_torch, padded_to_real_action, safe_metric
+from train_ppo import (
+    create_plc,
+    get_proxy_cost,
+    obs_to_torch,
+    padded_to_real_action,
+    safe_metric,
+)
 
 
 def main() -> int:
@@ -25,6 +31,9 @@ def main() -> int:
     parser.add_argument("--max_nodes", type=int, default=1024)
     parser.add_argument("--max_edges", type=int, default=10000)
     parser.add_argument("--max_grid", type=int, default=32)
+    parser.add_argument("--wirelength_weight", type=float, default=1.0)
+    parser.add_argument("--density_weight", type=float, default=0.5)
+    parser.add_argument("--congestion_weight", type=float, default=0.5)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--deterministic", action="store_true")
     args = parser.parse_args()
@@ -54,11 +63,17 @@ def main() -> int:
         ),
     )
     macros = extractor.movable_hard_macros(max_macros=args.max_macros)
-    initial_cost = float(plc.get_cost())
+    initial_cost, initial_components = get_proxy_cost(
+        plc,
+        wirelength_weight=args.wirelength_weight,
+        density_weight=args.density_weight,
+        congestion_weight=args.congestion_weight,
+    )
     # Circuit Training resets placement by unplacing movable nodes before the
     # hard-macro sequence starts. Keep evaluation aligned with training.
     plc.unplace_all_nodes()
     final_cost = initial_cost
+    final_components = initial_components
     invalid_action = None
 
     start = time.perf_counter()
@@ -85,7 +100,12 @@ def main() -> int:
         plc.FLAG_UPDATE_WIRELENGTH = True
         plc.FLAG_UPDATE_DENSITY = True
         plc.FLAG_UPDATE_CONGESTION = True
-        final_cost = float(plc.get_cost())
+        final_cost, final_components = get_proxy_cost(
+            plc,
+            wirelength_weight=args.wirelength_weight,
+            density_weight=args.density_weight,
+            congestion_weight=args.congestion_weight,
+        )
         steps += 1
     runtime = time.perf_counter() - start
 
@@ -100,9 +120,13 @@ def main() -> int:
         "initial_cost": initial_cost,
         "cost": final_cost,
         "best_cost": final_cost,
+        "wirelength_weight": args.wirelength_weight,
+        "density_weight": args.density_weight,
+        "congestion_weight": args.congestion_weight,
         "wirelength": safe_metric(plc.get_wirelength),
-        "density_cost": safe_metric(plc.get_density_cost),
-        "congestion_cost": safe_metric(plc.get_congestion_cost),
+        "wirelength_cost": final_components["wirelength_cost"],
+        "density_cost": final_components["density_cost"],
+        "congestion_cost": final_components["congestion_cost"],
         "runtime_sec": runtime,
         "steps": steps,
         "invalid_action": invalid_action,

@@ -2224,7 +2224,11 @@ class PlacementCost(object):
         # TODO: add check valid clause
         if not mod.get_fix_flag():
             mod.set_pos(*self.__get_grid_cell_position(grid_cell_idx))
-            self.placed_macro.append(self.mod_name_to_indices[mod.get_name()])
+            # Track the actual placed node index. Looking it up again by name is
+            # unsafe for generated designs where macro bodies and macro pins may
+            # share the same logical base name (for example "gen_mem"), which can
+            # resolve to a MACRO_PIN entry instead of the macro itself.
+            self.placed_macro.append(node_idx)
             mod.set_placed_flag(True)
 
             # update flag

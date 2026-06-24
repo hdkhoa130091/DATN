@@ -507,6 +507,7 @@ def main() -> int:
     )
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
+    args.init_plc = str(normalize_plc_metadata_if_needed(args.init_plc))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

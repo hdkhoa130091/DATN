@@ -145,6 +145,26 @@ class PlacementCost(object):
         f.seek(pos)
         return t_line
 
+    def __extract_quoted_or_token(self, line: str, token_pattern: str) -> str:
+        """Extract a protobuf value, preserving escaped names like gen_mem\\[0\\].u_mem."""
+        quoted = re.search(r'"([^"]*)"', line)
+        if quoted:
+            value = quoted.group(1)
+            return (
+                value
+                .replace(r"\/", "/")
+                .replace(r"\[", "[")
+                .replace(r"\]", "]")
+                .replace(r"\\", "\\")
+            )
+
+        line_item = re.findall(token_pattern, line)
+        if len(line_item) >= 2:
+            return line_item[1]
+        if len(line_item) == 1:
+            return line_item[0]
+        return ""
+
     def __read_protobuf(self):
         """
         private function: Protobuf Netlist Parser
@@ -179,7 +199,9 @@ class PlacementCost(object):
                     line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
                     # retrieve node name
                     if line_item[0] == 'name':
-                        node_name = line_item[1]
+                        node_name = self.__extract_quoted_or_token(
+                            line, r'\w+[^\:\n\\{\}\s"]*'
+                        )
                         # skip metadata header
                         if node_name == "__metadata__":
                             pass
@@ -194,12 +216,20 @@ class PlacementCost(object):
                     line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
                     # retrieve node input
                     if line_item[0] == 'input':
-                        input_list.append(line_item[1])
+                        input_list.append(
+                            self.__extract_quoted_or_token(
+                                line, r'\w+[^\:\n\\{\}\s"]*'
+                            )
+                        )
 
                         while re.findall(r'\w+[^\:\n\\{\}\s"]*', self.__peek(fp))[0] == 'input':
                             line = fp.readline()
                             line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
-                            input_list.append(line_item[1])
+                            input_list.append(
+                                self.__extract_quoted_or_token(
+                                    line, r'\w+[^\:\n\\{\}\s"]*'
+                                )
+                            )
 
                         line = fp.readline()
                         line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
@@ -222,9 +252,12 @@ class PlacementCost(object):
 
                             # advance, expect value item
                             line = fp.readline()
-                            line_item = re.findall(r'\w+[^\:\n\\{\}\s"]*', line)
-
-                            attr_dict[key] = line_item
+                            attr_dict[key] = [
+                                key,
+                                self.__extract_quoted_or_token(
+                                    line, r'\w+[^\:\n\\{\}\s"]*'
+                                ),
+                            ]
 
                             line = fp.readline()
                             line = fp.readline()
@@ -238,9 +271,12 @@ class PlacementCost(object):
 
                             # advance, expect value item
                             line = fp.readline()
-                            line_item = re.findall(r'\-*\w+\.*\/{0,1}\w*[\w+\/{0,1}\w*]*', line)
-
-                            attr_dict[key] = line_item
+                            attr_dict[key] = [
+                                key,
+                                self.__extract_quoted_or_token(
+                                    line, r'\-*\w+\.*\/{0,1}\w*[\w+\/{0,1}\w*]*'
+                                ),
+                            ]
 
                             line = fp.readline()
                             line = fp.readline()

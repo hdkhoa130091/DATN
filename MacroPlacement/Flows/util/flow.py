@@ -3,6 +3,7 @@ import argparse
 import time
 import shutil
 import sys
+import re
 from math import sqrt
 from gen_setup import gen_setup
 
@@ -11,6 +12,67 @@ output_dir = sys.argv[2]
 
 run_dir = os.path.abspath(run_dir)
 output_dir = os.path.abspath(output_dir)
+
+
+def normalize_ng45_plc_metadata_if_needed(plc_path: str) -> bool:
+    if "NanGate45" not in plc_path or not os.path.isfile(plc_path):
+        return False
+
+    defaults = {
+        "routes": "# Routes per micron, hor : 57.031  ver : 56.818",
+        "macro_routes": "# Routes used by macros, hor : 39.583  ver : 30.303",
+        "smooth": "# Smoothing factor : 0",
+        "overlap": "# Overlap threshold : 0.0000",
+    }
+    with open(plc_path, "r", encoding="utf-8") as fp:
+        lines = fp.read().splitlines()
+
+    def needs_default(line):
+        if line is None:
+            return True
+        nums = re.findall(r"[-+]?\d+(?:\.\d+)?", line)
+        if not nums:
+            return True
+        return all(float(num) == 0.0 for num in nums)
+
+    prefixes = {
+        "routes": "# Routes per micron, hor : ",
+        "macro_routes": "# Routes used by macros, hor : ",
+        "smooth": "# Smoothing factor : ",
+        "overlap": "# Overlap threshold : ",
+    }
+    existing = {
+        key: next((line for line in lines if line.startswith(prefix)), None)
+        for key, prefix in prefixes.items()
+    }
+    insert_at = next((idx for idx, line in enumerate(lines) if not line.startswith("#")), len(lines))
+    changed = False
+
+    def replace_or_insert(prefix, new_line):
+        nonlocal lines, insert_at, changed
+        for idx, line in enumerate(lines):
+            if line.startswith(prefix):
+                if line != new_line:
+                    lines[idx] = new_line
+                    changed = True
+                return
+        lines.insert(insert_at, new_line)
+        insert_at += 1
+        changed = True
+
+    if needs_default(existing["routes"]):
+        replace_or_insert(prefixes["routes"], defaults["routes"])
+    if needs_default(existing["macro_routes"]):
+        replace_or_insert(prefixes["macro_routes"], defaults["macro_routes"])
+    if existing["smooth"] is None:
+        replace_or_insert(prefixes["smooth"], defaults["smooth"])
+    if existing["overlap"] is None:
+        replace_or_insert(prefixes["overlap"], defaults["overlap"])
+
+    if changed:
+        with open(plc_path, "w", encoding="utf-8") as fp:
+            fp.write("\n".join(lines) + "\n")
+    return changed
 
 ## gen_setup create the setup.tcl file which is
 ## used in the later part of the code
@@ -100,3 +162,7 @@ cluster_def = f"{output_dir}/OpenROAD/clustered_netlist.def"
 cluster_lef = f"{output_dir}/OpenROAD/clusters.lef"
 
 os.chdir(tmp_dir)
+
+generated_plc = os.path.join(run_dir, f"{design}.plc")
+if normalize_ng45_plc_metadata_if_needed(generated_plc):
+    print(f"[INFO] Normalized missing NanGate45 PLC metadata: {generated_plc}")

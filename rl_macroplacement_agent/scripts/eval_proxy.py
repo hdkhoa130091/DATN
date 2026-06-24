@@ -10,7 +10,7 @@ from path_utils import add_repo_paths
 add_repo_paths()
 
 from plc_client_os import PlacementCost
-from train_ppo import get_proxy_cost
+from train_ppo import create_plc, get_proxy_cost
 
 
 def safe_call(name, fn):
@@ -39,13 +39,7 @@ def main() -> int:
     if not plc_path.is_file():
         raise FileNotFoundError(f"Placement file not found: {plc_path}")
 
-    plc = PlacementCost(str(netlist_path))
-    plc.restore_placement(
-        str(plc_path),
-        ifInital=True,
-        ifValidate=False,
-        ifReadComment=True,
-    )
+    plc = create_plc(str(netlist_path), str(plc_path))
 
     width, height = plc.get_canvas_width_height()
     cols, rows = plc.get_grid_num_columns_rows()

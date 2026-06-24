@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import time
 from pathlib import Path
 
@@ -104,6 +105,93 @@ def safe_metric(fn):
         return {"error": repr(exc)}
 
 
+NG45_PLC_DEFAULTS = {
+    "route_hor": "57.031",
+    "route_ver": "56.818",
+    "macro_route_hor": "39.583",
+    "macro_route_ver": "30.303",
+    "smooth_range": "0",
+    "overlap_threshold": "0.0000",
+}
+
+
+def _plc_line_needs_default(line: str | None) -> bool:
+    if line is None:
+        return True
+    nums = re.findall(r"[-+]?\d+(?:\.\d+)?", line)
+    if not nums:
+        return True
+    return all(float(num) == 0.0 for num in nums)
+
+
+def normalize_plc_metadata_if_needed(plc_path: str | Path) -> Path:
+    """Return a .plc path with valid NanGate45 metadata, patching if needed."""
+    path = Path(plc_path)
+    if "NanGate45" not in str(path):
+        return path
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    comment_prefixes = {
+        "routes": "# Routes per micron, hor : ",
+        "macro_routes": "# Routes used by macros, hor : ",
+        "smooth": "# Smoothing factor : ",
+        "overlap": "# Overlap threshold : ",
+    }
+    existing = {
+        key: next((line for line in lines if line.startswith(prefix)), None)
+        for key, prefix in comment_prefixes.items()
+    }
+
+    changed = False
+    insert_at = next((idx for idx, line in enumerate(lines) if not line.startswith("#")), len(lines))
+
+    def replace_or_insert(prefix: str, new_line: str) -> None:
+        nonlocal lines, changed, insert_at
+        for idx, line in enumerate(lines):
+            if line.startswith(prefix):
+                if line != new_line:
+                    lines[idx] = new_line
+                    changed = True
+                return
+        lines.insert(insert_at, new_line)
+        insert_at += 1
+        changed = True
+
+    if _plc_line_needs_default(existing["routes"]):
+        replace_or_insert(
+            comment_prefixes["routes"],
+            f"# Routes per micron, hor : {NG45_PLC_DEFAULTS['route_hor']}  ver : {NG45_PLC_DEFAULTS['route_ver']}",
+        )
+    if _plc_line_needs_default(existing["macro_routes"]):
+        replace_or_insert(
+            comment_prefixes["macro_routes"],
+            f"# Routes used by macros, hor : {NG45_PLC_DEFAULTS['macro_route_hor']}  ver : {NG45_PLC_DEFAULTS['macro_route_ver']}",
+        )
+    if existing["smooth"] is None:
+        replace_or_insert(
+            comment_prefixes["smooth"],
+            f"# Smoothing factor : {NG45_PLC_DEFAULTS['smooth_range']}",
+        )
+    if existing["overlap"] is None:
+        replace_or_insert(
+            comment_prefixes["overlap"],
+            f"# Overlap threshold : {NG45_PLC_DEFAULTS['overlap_threshold']}",
+        )
+
+    if not changed:
+        return path
+
+    normalized_text = "\n".join(lines) + "\n"
+    try:
+        path.write_text(normalized_text, encoding="utf-8")
+        return path
+    except PermissionError:
+        temp_path = Path("/tmp") / f"{path.stem}.normalized.plc"
+        temp_path.write_text(normalized_text, encoding="utf-8")
+        print(f"[plc-meta] Wrote normalized writable copy: {temp_path}")
+        return temp_path
+
+
 def format_seconds(seconds: float) -> str:
     seconds = max(float(seconds), 0.0)
     hours = int(seconds // 3600)
@@ -126,13 +214,23 @@ def get_proxy_cost(
     density = safe_metric(plc.get_density_cost)
     congestion = safe_metric(plc.get_congestion_cost)
 
+    metric_errors = []
+    if wirelength_weight > 0.0 and isinstance(wirelength, dict):
+        metric_errors.append(f"wirelength={wirelength['error']}")
+    if density_weight > 0.0 and isinstance(density, dict):
+        metric_errors.append(f"density={density['error']}")
+    if congestion_weight > 0.0 and isinstance(congestion, dict):
+        metric_errors.append(f"congestion={congestion['error']}")
+    if metric_errors:
+        raise RuntimeError(
+            "Proxy cost metric computation failed for weighted terms: "
+            + ", ".join(metric_errors)
+        )
+
     proxy_cost = 0.0
-    if not isinstance(wirelength, dict):
-        proxy_cost += wirelength_weight * float(wirelength)
-    if not isinstance(density, dict):
-        proxy_cost += density_weight * float(density)
-    if not isinstance(congestion, dict):
-        proxy_cost += congestion_weight * float(congestion)
+    proxy_cost += wirelength_weight * float(wirelength)
+    proxy_cost += density_weight * float(density)
+    proxy_cost += congestion_weight * float(congestion)
 
     return proxy_cost, {
         "wirelength_cost": wirelength,
@@ -142,9 +240,10 @@ def get_proxy_cost(
 
 
 def create_plc(netlist: str, init_plc: str) -> PlacementCost:
+    normalized_plc = normalize_plc_metadata_if_needed(init_plc)
     plc = PlacementCost(netlist)
     plc.restore_placement(
-        init_plc,
+        str(normalized_plc),
         ifInital=True,
         ifValidate=False,
         ifReadComment=True,

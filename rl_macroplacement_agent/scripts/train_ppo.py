@@ -262,7 +262,6 @@ def collect_episode(
     max_edges: int,
     max_grid: int,
     max_macros: int,
-    reward_scale: float,
     wirelength_weight: float,
     density_weight: float,
     congestion_weight: float,
@@ -315,7 +314,6 @@ def collect_episode(
     # to be placed later remain at their initial locations and incorrectly block
     # the action mask, which can make larger episodes infeasible.
     plc.unplace_all_nodes()
-    previous_cost = initial_cost
     final_cost = initial_cost
     final_components = initial_components
     episode_start = time.perf_counter()
@@ -405,7 +403,6 @@ def collect_episode(
             density_weight=density_weight,
             congestion_weight=congestion_weight,
         )
-        rewards[step_idx] = (previous_cost - final_cost) * reward_scale
         step_rows.append(
             {
                 "step": step_idx + 1,
@@ -414,10 +411,9 @@ def collect_episode(
                 "real_action": real_action,
                 "valid": 1,
                 "proxy_cost": final_cost,
-                "reward": rewards[step_idx],
+                "reward": 0.0,
             }
         )
-        previous_cost = final_cost
 
         should_log = (
             progress_every_steps > 0
@@ -432,7 +428,7 @@ def collect_episode(
             print(
                 f"[train] episode {episode_idx + 1 if episode_idx is not None else '?'} "
                 f"step {step_idx + 1}/{total_steps} | "
-                f"proxy_cost={final_cost:.6f} | reward={rewards[step_idx]:.3f} | "
+                f"proxy_cost={final_cost:.6f} | reward=0.000 | "
                 f"elapsed={format_seconds(elapsed)}",
                 flush=True,
             )
@@ -440,7 +436,13 @@ def collect_episode(
     terminal_idx = len(observations) - 1
     if terminal_idx >= 0 and invalid_action is None:
         dones[terminal_idx] = 1.0
-        step_rows[terminal_idx]["reward"] = rewards[terminal_idx]
+        # Circuit Training style: reward is the negative final proxy cost at the
+        # terminal step only.
+        terminal_reward = -final_cost
+        rewards[terminal_idx] = terminal_reward
+        step_rows[terminal_idx]["reward"] = terminal_reward
+    else:
+        terminal_reward = rewards[terminal_idx] if terminal_idx >= 0 else 0.0
 
     used_len = len(observations)
     rewards_t = torch.as_tensor(rewards[:used_len], dtype=torch.float32, device=device)
@@ -461,10 +463,16 @@ def collect_episode(
         "initial_cost": initial_cost,
         "final_cost": final_cost,
         "episode_reward": float(rewards_t.sum().item()),
+        "terminal_reward": float(terminal_reward),
         "steps": used_len,
         "invalid_action": invalid_action,
-        "reward_mode": "dense_delta_cost",
         "wirelength": safe_metric(plc.get_wirelength),
+        "initial_wirelength_cost": initial_components["wirelength_cost"],
+        "initial_density_cost": initial_components["density_cost"],
+        "initial_congestion_cost": initial_components["congestion_cost"],
+        "final_wirelength_cost": final_components["wirelength_cost"],
+        "final_density_cost": final_components["density_cost"],
+        "final_congestion_cost": final_components["congestion_cost"],
         "wirelength_cost": final_components["wirelength_cost"],
         "density_cost": final_components["density_cost"],
         "congestion_cost": final_components["congestion_cost"],
@@ -484,7 +492,6 @@ def main() -> int:
     parser.add_argument("--max_nodes", type=int, default=1024)
     parser.add_argument("--max_edges", type=int, default=10000)
     parser.add_argument("--max_grid", type=int, default=32)
-    parser.add_argument("--reward_scale", type=float, default=1000.0)
     parser.add_argument("--wirelength_weight", type=float, default=1.0)
     parser.add_argument("--density_weight", type=float, default=0.5)
     parser.add_argument("--congestion_weight", type=float, default=0.5)
@@ -550,9 +557,16 @@ def main() -> int:
         "initial_cost",
         "final_cost",
         "episode_reward",
+        "terminal_reward",
         "steps",
         "episode_runtime_sec",
         "invalid_action",
+        "initial_wirelength_cost",
+        "initial_density_cost",
+        "initial_congestion_cost",
+        "final_wirelength_cost",
+        "final_density_cost",
+        "final_congestion_cost",
         "loss",
         "policy_loss",
         "value_loss",
@@ -566,6 +580,7 @@ def main() -> int:
 
     train_start = time.perf_counter()
     best_cost = float("inf")
+    best_reward = float("-inf")
     last_summary = {}
     rollout_plc = create_plc(args.netlist, args.init_plc)
     rollout_extractor = AlphaChipLikeFeatureExtractor(
@@ -596,7 +611,6 @@ def main() -> int:
             max_edges=args.max_edges,
             max_grid=args.max_grid,
             max_macros=args.max_macros,
-            reward_scale=args.reward_scale,
             wirelength_weight=args.wirelength_weight,
             density_weight=args.density_weight,
             congestion_weight=args.congestion_weight,
@@ -614,6 +628,7 @@ def main() -> int:
         pending_batches.append(batch)
         pending_rows.append((episode, summary))
         best_cost = min(best_cost, float(summary["final_cost"]))
+        best_reward = max(best_reward, float(summary["terminal_reward"]))
         should_update = (
             len(pending_batches) >= args.rollout_episodes
             or episode == args.episodes - 1
@@ -636,9 +651,16 @@ def main() -> int:
                         "initial_cost": pending_summary["initial_cost"],
                         "final_cost": pending_summary["final_cost"],
                         "episode_reward": pending_summary["episode_reward"],
+                        "terminal_reward": pending_summary["terminal_reward"],
                         "steps": pending_summary["steps"],
                         "episode_runtime_sec": pending_summary["episode_runtime_sec"],
                         "invalid_action": pending_summary["invalid_action"],
+                        "initial_wirelength_cost": pending_summary["initial_wirelength_cost"],
+                        "initial_density_cost": pending_summary["initial_density_cost"],
+                        "initial_congestion_cost": pending_summary["initial_congestion_cost"],
+                        "final_wirelength_cost": pending_summary["final_wirelength_cost"],
+                        "final_density_cost": pending_summary["final_density_cost"],
+                        "final_congestion_cost": pending_summary["final_congestion_cost"],
                         **metrics,
                     }
                 )
@@ -684,6 +706,7 @@ def main() -> int:
         "resume_from": args.resume_from,
         "stage_name": args.stage_name,
         "best_cost": best_cost,
+        "best_reward": best_reward,
         "last_episode": last_summary,
         "train_runtime_sec": train_runtime,
     }

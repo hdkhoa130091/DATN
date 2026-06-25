@@ -108,6 +108,7 @@ def main() -> int:
         )
         steps += 1
     runtime = time.perf_counter() - start
+    terminal_reward = -final_cost if invalid_action is None else -4.0
 
     final_plc = out_dir / "alphachip_like_final.plc"
     plc.save_placement(str(final_plc))
@@ -120,10 +121,17 @@ def main() -> int:
         "initial_cost": initial_cost,
         "cost": final_cost,
         "best_cost": final_cost,
+        "terminal_reward": terminal_reward,
         "wirelength_weight": args.wirelength_weight,
         "density_weight": args.density_weight,
         "congestion_weight": args.congestion_weight,
         "wirelength": safe_metric(plc.get_wirelength),
+        "initial_wirelength_cost": initial_components["wirelength_cost"],
+        "initial_density_cost": initial_components["density_cost"],
+        "initial_congestion_cost": initial_components["congestion_cost"],
+        "final_wirelength_cost": final_components["wirelength_cost"],
+        "final_density_cost": final_components["density_cost"],
+        "final_congestion_cost": final_components["congestion_cost"],
         "wirelength_cost": final_components["wirelength_cost"],
         "density_cost": final_components["density_cost"],
         "congestion_cost": final_components["congestion_cost"],

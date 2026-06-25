@@ -37,6 +37,22 @@ Ba weight này có thể đổi trực tiếp bằng:
 - `--density_weight`
 - `--congestion_weight`
 
+## Reward mặc định
+
+Theo hướng AlphaChip / Google Circuit Training, reward mặc định là reward cuối
+episode dựa trên proxy cost placement cuối:
+
+```text
+terminal_reward = -final_proxy_cost
+```
+
+Trong repo này:
+
+- Các step trung gian có reward `0.0`
+- Step cuối episode dùng `-final_cost`
+- Invalid action giữ penalty riêng, mặc định `-4.0`
+- `initial_cost` chỉ dùng để log baseline và so sánh, không dùng làm RL reward
+
 ## Setup
 
 ```bash
@@ -151,6 +167,17 @@ python rl_macroplacement_agent/scripts/train_ppo.py \
   --max_edges 10000 \
   --max_grid 32 \
   --device cpu
+```
+
+Test tối thiểu:
+
+```bash
+python rl_macroplacement_agent/scripts/train_ppo.py \
+  --netlist <path_to_netlist.pb.txt> \
+  --init_plc <path_to_initial.plc> \
+  --out_dir /tmp/ppo_ct_smoke \
+  --episodes 2 \
+  --rollout_episodes 1
 ```
 
 ## Evaluate policy

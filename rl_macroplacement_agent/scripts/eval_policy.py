@@ -121,7 +121,11 @@ def main() -> int:
         "initial_cost": initial_cost,
         "cost": final_cost,
         "best_cost": final_cost,
+        # cost_delta is only for reporting baseline improvement, not used as RL reward.
+        "cost_delta": initial_cost - final_cost,
         "terminal_reward": terminal_reward,
+        "last_rollout_reward": terminal_reward,
+        "reward_sum": terminal_reward,
         "wirelength_weight": args.wirelength_weight,
         "density_weight": args.density_weight,
         "congestion_weight": args.congestion_weight,

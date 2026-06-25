@@ -268,7 +268,7 @@ def collect_episode(
     deterministic: bool = False,
     plc: PlacementCost | None = None,
     extractor: AlphaChipLikeFeatureExtractor | None = None,
-    progress_every_steps: int = 0,
+    log_steps: bool = False,
     episode_idx: int | None = None,
     total_episodes: int | None = None,
 ) -> tuple[RolloutBatch, dict, list[dict], str | None]:
@@ -319,13 +319,6 @@ def collect_episode(
     episode_start = time.perf_counter()
     total_steps = len(macros)
 
-    if episode_idx is not None and total_episodes is not None:
-        print(
-            f"[train] episode {episode_idx + 1}/{total_episodes} started | "
-            f"initial_cost={initial_cost:.6f} | macros={total_steps}",
-            flush=True,
-        )
-
     model.eval()
     for step_idx, node_idx in enumerate(macros):
         obs = extractor.observation_for_node(node_idx)
@@ -348,12 +341,13 @@ def collect_episode(
                     "reward": rewards[step_idx],
                 }
             )
-            if progress_every_steps > 0:
+            if log_steps:
                 elapsed = time.perf_counter() - episode_start
                 print(
                     f"[train] episode {episode_idx + 1 if episode_idx is not None else '?'} "
                     f"step {step_idx + 1}/{total_steps} | invalid_mask | "
-                    f"proxy_cost={final_cost:.6f} | elapsed={format_seconds(elapsed)}",
+                    f"proxy_cost={final_cost:.6f} | step_reward={rewards[step_idx]:.3f} | "
+                    f"elapsed={format_seconds(elapsed)}",
                     flush=True,
                 )
             break
@@ -415,20 +409,12 @@ def collect_episode(
             }
         )
 
-        should_log = (
-            progress_every_steps > 0
-            and (
-                step_idx == 0
-                or (step_idx + 1) % progress_every_steps == 0
-                or step_idx + 1 == total_steps
-            )
-        )
-        if should_log:
+        if log_steps:
             elapsed = time.perf_counter() - episode_start
             print(
                 f"[train] episode {episode_idx + 1 if episode_idx is not None else '?'} "
                 f"step {step_idx + 1}/{total_steps} | "
-                f"proxy_cost={final_cost:.6f} | reward=0.000 | "
+                f"proxy_cost={final_cost:.6f} | step_reward=0.000 | "
                 f"elapsed={format_seconds(elapsed)}",
                 flush=True,
             )
@@ -441,6 +427,10 @@ def collect_episode(
         terminal_reward = -final_cost
         rewards[terminal_idx] = terminal_reward
         step_rows[terminal_idx]["reward"] = terminal_reward
+        assert abs(rewards[terminal_idx] - terminal_reward) < 1e-9, (
+            f"Terminal reward mismatch: rewards[-1]={rewards[terminal_idx]}, "
+            f"terminal_reward={terminal_reward}"
+        )
     else:
         terminal_reward = rewards[terminal_idx] if terminal_idx >= 0 else 0.0
 
@@ -462,9 +452,14 @@ def collect_episode(
     summary = {
         "initial_cost": initial_cost,
         "final_cost": final_cost,
-        "episode_reward": float(rewards_t.sum().item()),
+        # cost_delta is only for reporting baseline improvement, not used as RL reward.
+        "cost_delta": initial_cost - final_cost,
+        "reward_sum": float(rewards_t.sum().item()),
         "terminal_reward": float(terminal_reward),
+        "last_rollout_reward": float(rewards_t[-1].item()) if used_len > 0 else 0.0,
         "steps": used_len,
+        "num_macros": total_steps,
+        "invalid": invalid_action is not None,
         "invalid_action": invalid_action,
         "wirelength": safe_metric(plc.get_wirelength),
         "initial_wirelength_cost": initial_components["wirelength_cost"],
@@ -505,10 +500,9 @@ def main() -> int:
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--ppo_epochs", type=int, default=4)
     parser.add_argument(
-        "--log_every_steps",
-        type=int,
-        default=10,
-        help="Print progress every N macro-placement steps inside an episode. Use 0 to disable.",
+        "--log_steps",
+        action="store_true",
+        help="Print per-step placement progress for debugging.",
     )
     parser.add_argument(
         "--batch_size",
@@ -556,8 +550,13 @@ def main() -> int:
         "episode",
         "initial_cost",
         "final_cost",
-        "episode_reward",
+        "cost_delta",
         "terminal_reward",
+        "last_rollout_reward",
+        "reward_sum",
+        "best_cost",
+        "invalid",
+        "num_macros",
         "steps",
         "episode_runtime_sec",
         "invalid_action",
@@ -616,7 +615,7 @@ def main() -> int:
             congestion_weight=args.congestion_weight,
             plc=rollout_plc,
             extractor=rollout_extractor,
-            progress_every_steps=args.log_every_steps,
+            log_steps=args.log_steps,
             episode_idx=episode,
             total_episodes=args.episodes,
         )
@@ -626,9 +625,24 @@ def main() -> int:
         batch.returns = returns
         batch.advantages = advantages
         pending_batches.append(batch)
-        pending_rows.append((episode, summary))
         best_cost = min(best_cost, float(summary["final_cost"]))
+        summary["best_cost"] = best_cost
         best_reward = max(best_reward, float(summary["terminal_reward"]))
+        pending_rows.append((episode, summary))
+        print(
+            f"[train] episode {episode + 1} done | "
+            f"initial_cost={summary['initial_cost']:.6f} | "
+            f"final_cost={summary['final_cost']:.6f} | "
+            f"cost_delta={summary['cost_delta']:.6f} | "
+            f"terminal_reward={summary['terminal_reward']:.6f} | "
+            f"last_rollout_reward={summary['last_rollout_reward']:.6f} | "
+            f"reward_sum={summary['reward_sum']:.6f} | "
+            f"macros={summary['num_macros']} | "
+            f"invalid={summary['invalid']} | "
+            f"best_cost={summary['best_cost']:.6f} | "
+            f"elapsed={format_seconds(summary['episode_runtime_sec'])}",
+            flush=True,
+        )
         should_update = (
             len(pending_batches) >= args.rollout_episodes
             or episode == args.episodes - 1
@@ -636,12 +650,9 @@ def main() -> int:
         if not should_update:
             continue
 
-        print(
-            f"[train] PPO update starting | collected_episodes={len(pending_batches)}",
-            flush=True,
-        )
         metrics = agent.update(concat_rollout_batches(pending_batches))
         last_metrics = metrics
+        batch_reward_sum = sum(float(row["reward_sum"]) for _, row in pending_rows)
         for pending_episode, pending_summary in pending_rows:
             with history_path.open("a", newline="", encoding="utf-8") as handle:
                 writer = csv.DictWriter(handle, fieldnames=history_fields)
@@ -650,8 +661,13 @@ def main() -> int:
                         "episode": pending_episode,
                         "initial_cost": pending_summary["initial_cost"],
                         "final_cost": pending_summary["final_cost"],
-                        "episode_reward": pending_summary["episode_reward"],
+                        "cost_delta": pending_summary["cost_delta"],
                         "terminal_reward": pending_summary["terminal_reward"],
+                        "last_rollout_reward": pending_summary["last_rollout_reward"],
+                        "reward_sum": pending_summary["reward_sum"],
+                        "best_cost": pending_summary["best_cost"],
+                        "invalid": pending_summary["invalid"],
+                        "num_macros": pending_summary["num_macros"],
                         "steps": pending_summary["steps"],
                         "episode_runtime_sec": pending_summary["episode_runtime_sec"],
                         "invalid_action": pending_summary["invalid_action"],
@@ -665,15 +681,16 @@ def main() -> int:
                     }
                 )
         last_summary = {**pending_rows[-1][1], **metrics}
-        batch_best_cost = min(float(row["final_cost"]) for _, row in pending_rows)
         print(
             f"[train] PPO update done | "
-            f"best_cost_so_far={best_cost:.6f} | "
-            f"batch_best_cost={batch_best_cost:.6f} | "
+            f"episodes={len(pending_batches)} | "
+            f"best_cost={best_cost:.6f} | "
+            f"batch_reward_sum={batch_reward_sum:.6f} | "
             f"loss={metrics['loss']:.6f} | "
             f"policy_loss={metrics['policy_loss']:.6f} | "
             f"value_loss={metrics['value_loss']:.6f} | "
             f"entropy={metrics['entropy']:.6f} | "
+            f"approx_kl={metrics['approx_kl']:.6f} | "
             f"clip_fraction={metrics['clip_fraction']:.6f}",
             flush=True,
         )

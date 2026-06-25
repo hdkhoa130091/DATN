@@ -95,6 +95,12 @@ class AlphaChipLikeFeatureExtractor:
         except Exception:
             return False
 
+    def _safe_float_call(self, fn, default: float = 0.0) -> float:
+        try:
+            return float(fn())
+        except Exception:
+            return float(default)
+
     def _port_cluster_location(self, grid_cell: int) -> tuple[float, float]:
         col = grid_cell % self.grid_cols
         row = grid_cell // self.grid_cols
@@ -114,7 +120,7 @@ class AlphaChipLikeFeatureExtractor:
 
         return x, y
 
-    def _metadata(self, sparse_adj_weight: np.ndarray) -> np.ndarray:
+    def _metadata(self) -> np.ndarray:
         routes_h, routes_v = self.plc.get_routes_per_micron()
         macro_routes_h, macro_routes_v = self.plc.get_macro_routing_allocation()
         hard_count = sum(
@@ -124,10 +130,20 @@ class AlphaChipLikeFeatureExtractor:
         )
         soft_count = self.num_macro_nodes - hard_count
         half_perimeter = max(self.canvas_width + self.canvas_height, 1.0)
+        current_wirelength_cost = self._safe_float_call(self.plc.get_cost)
+        current_density_cost = self._safe_float_call(self.plc.get_density_cost)
+        current_congestion_cost = self._safe_float_call(self.plc.get_congestion_cost)
+        placed_hard_macros = sum(
+            1
+            for idx in self.macro_indices
+            if (not self._safe_bool_call(self.plc.is_node_soft_macro, idx))
+            and self._safe_bool_call(self.plc.is_node_placed, idx)
+        )
+        placed_ratio = placed_hard_macros / max(hard_count, 1)
 
         return np.asarray(
             [
-                float(np.sum(sparse_adj_weight)) / max(self.config.max_num_edges, 1),
+                self.total_sparse_weight / max(self.config.max_num_edges, 1),
                 hard_count / max(self.config.max_num_nodes, 1),
                 soft_count / max(self.config.max_num_nodes, 1),
                 self.num_port_nodes / max(self.config.max_num_nodes, 1),
@@ -139,6 +155,10 @@ class AlphaChipLikeFeatureExtractor:
                 self.grid_rows / max(self.config.max_grid_size, 1),
                 self.canvas_width / half_perimeter,
                 self.canvas_height / half_perimeter,
+                current_wirelength_cost,
+                current_density_cost,
+                current_congestion_cost,
+                placed_ratio,
             ],
             dtype=np.float32,
         )
@@ -231,8 +251,8 @@ class AlphaChipLikeFeatureExtractor:
 
     def _extract_static_obs(self) -> dict[str, np.ndarray]:
         sparse_i, sparse_j, sparse_w, edge_counts = self._extract_sparse_edges()
+        self.total_sparse_weight = float(np.sum(sparse_w))
         return {
-            "metadata": self._metadata(sparse_w),
             "node_features": self._extract_node_features(),
             "sparse_adj_i": sparse_i,
             "sparse_adj_j": sparse_j,
@@ -293,6 +313,7 @@ class AlphaChipLikeFeatureExtractor:
         # Static graph tensors are immutable for one extractor instance, so keep
         # references instead of copying large padded arrays every placement step.
         obs = dict(self.static_obs)
+        obs["metadata"] = self._metadata()
         # Locations and placement flags change after every action, so refresh
         # node features while reusing the expensive static graph tensors.
         obs["node_features"] = self._extract_node_features()

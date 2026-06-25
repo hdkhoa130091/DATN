@@ -30,7 +30,7 @@ class AlphaChipLikeModelConfig:
     max_num_edges: int = 70000
     max_grid_size: int = 128
     node_feature_dim: int = 8
-    metadata_dim: int = 12
+    metadata_dim: int = 16
     hidden_dim: int = 64
     gcn_layers: int = 3
     edge_mlp_layers: int = 1

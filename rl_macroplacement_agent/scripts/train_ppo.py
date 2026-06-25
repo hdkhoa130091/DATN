@@ -315,6 +315,7 @@ def collect_episode(
     # to be placed later remain at their initial locations and incorrectly block
     # the action mask, which can make larger episodes infeasible.
     plc.unplace_all_nodes()
+    previous_cost = initial_cost
     final_cost = initial_cost
     final_components = initial_components
     episode_start = time.perf_counter()
@@ -404,6 +405,7 @@ def collect_episode(
             density_weight=density_weight,
             congestion_weight=congestion_weight,
         )
+        rewards[step_idx] = (previous_cost - final_cost) * reward_scale
         step_rows.append(
             {
                 "step": step_idx + 1,
@@ -412,9 +414,10 @@ def collect_episode(
                 "real_action": real_action,
                 "valid": 1,
                 "proxy_cost": final_cost,
-                "reward": 0.0,
+                "reward": rewards[step_idx],
             }
         )
+        previous_cost = final_cost
 
         should_log = (
             progress_every_steps > 0
@@ -429,13 +432,13 @@ def collect_episode(
             print(
                 f"[train] episode {episode_idx + 1 if episode_idx is not None else '?'} "
                 f"step {step_idx + 1}/{total_steps} | "
-                f"proxy_cost={final_cost:.6f} | elapsed={format_seconds(elapsed)}",
+                f"proxy_cost={final_cost:.6f} | reward={rewards[step_idx]:.3f} | "
+                f"elapsed={format_seconds(elapsed)}",
                 flush=True,
             )
 
     terminal_idx = len(observations) - 1
     if terminal_idx >= 0 and invalid_action is None:
-        rewards[terminal_idx] = (initial_cost - final_cost) * reward_scale
         dones[terminal_idx] = 1.0
         step_rows[terminal_idx]["reward"] = rewards[terminal_idx]
 
@@ -460,6 +463,7 @@ def collect_episode(
         "episode_reward": float(rewards_t.sum().item()),
         "steps": used_len,
         "invalid_action": invalid_action,
+        "reward_mode": "dense_delta_cost",
         "wirelength": safe_metric(plc.get_wirelength),
         "wirelength_cost": final_components["wirelength_cost"],
         "density_cost": final_components["density_cost"],

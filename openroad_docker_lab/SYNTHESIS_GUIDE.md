@@ -2,6 +2,34 @@
 
 ## Giới thiệu
 
+## Chuẩn bị môi trường host cho phần Python/RL
+
+Trước khi chạy các bước `flow.py`, `fix_plc.py`, train RL hay eval RL trên host,
+hãy tạo virtualenv thống nhất như sau:
+
+```bash
+cd /home/khoahd/Documents/DATN-1
+python3.10 -m venv rl_env
+source rl_env/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r rl_macroplacement_agent/requirements.txt
+```
+
+Nên dùng `python3.10` hoặc `python3.11`. Không nên dùng `python3.14` cho
+virtualenv này vì `torch<2.5` trong pipeline hiện tại không có wheel phù hợp.
+
+Nếu chỉ muốn kiểm tra lại môi trường đã có:
+
+```bash
+cd /home/khoahd/Documents/DATN-1
+source rl_env/bin/activate
+python -c "import absl, numpy, matplotlib, sortedcontainers, torch, pandas; print('python env ok')"
+python rl_macroplacement_agent/scripts/train_ppo.py --help > /dev/null
+python rl_macroplacement_agent/scripts/eval_policy.py --help > /dev/null
+python openroad_docker_lab/scripts/fix_plc.py --help > /dev/null
+echo "pipeline python scripts ok"
+```
+
 Quy trình chuẩn để tạo đầu vào cho bài toán macro placement gồm các giai đoạn:
 
 ```text

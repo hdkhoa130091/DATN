@@ -1,5 +1,8 @@
 '''
-Convert plc to place.tcl for macros
+Convert a PLC + protobuf netlist into OpenROAD macro placement Tcl.
+
+Output format:
+  place_macro -macro_name {inst_name} -location {x y} -orientation R0
 '''
 import sys
 import re
@@ -106,10 +109,16 @@ for line in lines:
             x = float(words[1]) - float(node_list[idx].width)/2.0 + origin_x
             y = float(words[2]) - float(node_list[idx].height)/2.0 + origin_y
             orient = orientMap[words[3]]
-            isFixed = words[4]
-            macro_name = node_list[idx].name.replace('_[', '\[')
-            macro_name = macro_name.replace('_]', '\]')
-            fp_out.write(f"placeInstance {macro_name} {x}"\
-                        f" {y} {orient} -fixed\n")
+            macro_name = node_list[idx].name.strip('"')
+            # The protobuf stores literal backslashes for bracketed instance names
+            # such as gen_mem\\[0\\].u_mem. OpenROAD macro commands expect a
+            # single backslash escape inside Tcl braces: gen_mem\[0\].u_mem.
+            macro_name = macro_name.replace('\\\\', '\\')
+            macro_name = macro_name.replace('_[', '\\[')
+            macro_name = macro_name.replace('_]', '\\]')
+            fp_out.write(
+                f"place_macro -macro_name {{{macro_name}}} "
+                f"-location {{{x} {y}}} -orientation {orient}\n"
+            )
 fp.close()
 fp_out.close()

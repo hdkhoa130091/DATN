@@ -5,6 +5,20 @@ oss-cad-suite-20260421/
 oss-cad-suite-linux-x64-20260421.tgz
 orfs.tar.gz
 rl_env/
+rl_env_verify/
+rl_env_verify310/
+.vscode/
+.compatlibs/
+experiments/
+BIEU MAU/
+presentation/
+example/
+tools/
+OpenROAD/
+h
+bao_cao_hoc_tang_cuong_pandoc.docx
+bao_cao_hoc_tang_cuong_pandoc.md
+bao_cao_hoc_tang_cuong_pandoc.odt
 __pycache__/
 *.pyc
 *.pyo

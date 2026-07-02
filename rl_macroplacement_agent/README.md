@@ -56,11 +56,14 @@ Trong repo này:
 ## Setup
 
 ```bash
-python3 -m venv rl_env
+python3.10 -m venv rl_env
 source rl_env/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r rl_macroplacement_agent/requirements.txt
 ```
+
+Nên dùng `python3.10` hoặc `python3.11`. Không nên tạo `rl_env` bằng
+`python3.14` vì `torch<2.5` trong pipeline hiện tại không có wheel phù hợp.
 
 Nếu dùng DREAMPlace:
 

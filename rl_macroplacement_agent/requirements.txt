@@ -1,8 +1,12 @@
+# Core Python dependencies for the full ORFS -> MacroPlacement -> RL pipeline.
+# This file is intentionally kept to the minimal set used by the current
+# pipeline scripts that remain in the repository.
+
 absl-py
 numpy<2
-pandas
-PyYAML
-gymnasium>=0.29,<1.1
+matplotlib
+sortedcontainers
 torch>=2.1,<2.5
-stable-baselines3>=2.3,<2.4
-sb3-contrib>=2.3,<2.4
+
+# Convenience dependency kept for CSV/JSON result inspection in ad-hoc analysis.
+pandas

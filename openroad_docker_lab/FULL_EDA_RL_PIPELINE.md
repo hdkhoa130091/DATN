@@ -80,6 +80,13 @@ docker ps
 
 ### 1.3. Build image OpenROAD của repo
 
+Lưu ý:
+
+- trong container `openroad_cli`, repo nằm tại `/workspace/DATN`
+- trên host, repo nằm tại `/home/khoahd/Documents/DATN-1`
+- `export_flow_inputs.sh` có thể chạy ở host hoặc trong container
+- `flow.py`, `train_ppo.py` và `eval_policy.py` nên chạy trên host với `rl_env`
+
 Chạy trên host:
 
 ```bash
@@ -171,6 +178,10 @@ python env ok
 pipeline python scripts ok
 ```
 
+Kết quả trong Docker:
+![Workspace path inside container](images/docker.png)
+
+
 Lưu ý:
 
 - luôn chạy các lệnh Python từ root repo `/home/khoahd/Documents/DATN-1`
@@ -245,7 +256,7 @@ Những file thường có:
 make -j1 \
   DESIGN_CONFIG=designs/<platform>/<design_name>/config.mk \
   FLOW_VARIANT=<flow_variant> \
-  results/<platform>/<design_name>/<flow_variant>/1_synth.odb
+  synth
 ```
 
 Ý nghĩa:
@@ -280,7 +291,6 @@ make -j1 \
   FLOW_VARIANT=<flow_variant> \
   do-place
 ```
-
 Ý nghĩa:
 
 - đọc floorplan
@@ -347,10 +357,13 @@ Thư mục đầu ra sẽ nằm tại:
 MacroPlacement/Flows/NanGate45/generated/<design_name>/<generated_name>/
 ```
 
-Nếu bị lỗi quyền ở thư mục `generated/`:
+Nếu bạn vừa export trong container bằng user `root`, có thể sẽ bị lỗi quyền ở
+thư mục `generated/`. Khi đó hãy đổi owner lại trước khi chạy `flow.py` trên
+host:
 
 ```bash
-sudo chown -R khoahd:khoahd MacroPlacement/Flows/NanGate45/generated
+sudo chown -R "$USER:$USER" \
+  MacroPlacement/Flows/NanGate45/generated/<design_name>/<generated_name>
 ```
 
 Hoặc nếu không dùng `sudo`, hãy sửa chủ sở hữu theo cách phù hợp trên máy của bạn.
@@ -363,6 +376,10 @@ Chạy trên host:
 cd /home/khoahd/Documents/DATN-1
 source rl_env/bin/activate
 ```
+
+Không dùng path `/workspace/DATN/...` ở bước này nếu bạn đã `exit` khỏi
+container. Trên host, hãy dùng path tương đối từ root repo hoặc path đầy đủ
+`/home/khoahd/Documents/DATN-1/...`.
 
 Chạy:
 
@@ -392,6 +409,16 @@ Kiểm tra:
 sed -n '1,20p' \
   MacroPlacement/Flows/NanGate45/generated/<design_name>/<generated_name>/<design_name>.plc
 ```
+
+Nếu gặp lỗi:
+
+- `PermissionError: ... output_CodeElement`
+  - thư mục `generated/.../<generated_name>/` đang thuộc owner `root`
+  - sửa lại bằng `chown` rồi chạy lại
+- `python3: can't open file '/workspace/DATN/.../openroad_partition_compat.py'`
+  - file wrapper `openroad` trong thư mục `generated/...` đang chứa path kiểu
+    container
+  - hãy export lại bằng script `export_flow_inputs.sh` mới nhất rồi chạy lại
 
 ## 6. Train RL
 
@@ -658,8 +685,8 @@ Phải dùng `plc` đã được normalize metadata đúng với NanGate45 trư�
 
 ## 12. Ví dụ đầy đủ với `practical_macro_soc_50`
 
-Ví dụ dưới đây dùng `practical50_run_tight2`, đây là flow variant đã được
-smoke-test end-to-end trong repo hiện tại.
+Ví dụ dưới đây dùng `run_1` để dễ thay lại cho các testcase khác. Bạn chỉ cần
+đổi `FLOW_VARIANT=run_1` sang tên lần chạy khác nếu muốn.
 
 ### 11.1. ORFS
 
@@ -669,60 +696,82 @@ source rl_env/bin/activate
 docker start openroad_cli
 docker exec -it openroad_cli bash
 cd /workspace/DATN/openroad_docker_lab/OpenROAD-flow-scripts/flow
-
+```
+Synthesis:
+```bash
 make -j1 \
   DESIGN_CONFIG=designs/nangate45/practical_macro_soc_50/config.mk \
-  FLOW_VARIANT=practical50_run_tight2 \
-  results/nangate45/practical_macro_soc_50/practical50_run_tight2/1_synth.odb
+  FLOW_VARIANT=run_1 \
+  synth
+```
+![Workspace path inside container](images/synthesis.png)
 
+Floorplanning:
+```bash
 make -j1 \
   DESIGN_CONFIG=designs/nangate45/practical_macro_soc_50/config.mk \
-  FLOW_VARIANT=practical50_run_tight2 \
+  FLOW_VARIANT=run_1 \
   do-floorplan
+```
+![Workspace path inside container](images/floorplanning.png)
 
+Placement:
+```bash
 make -j1 \
   DESIGN_CONFIG=designs/nangate45/practical_macro_soc_50/config.mk \
-  FLOW_VARIANT=practical50_run_tight2 \
+  FLOW_VARIANT=run_1 \
   do-place
 ```
+![Workspace path inside container](images/placement.png)
 
 ### 11.2. DEF nếu thiếu
 
 ```bash
 openroad -no_init <<'EOF'
-read_db results/nangate45/practical_macro_soc_50/practical50_run_tight2/3_place.odb
-write_def results/nangate45/practical_macro_soc_50/practical50_run_tight2/3_place.def
+read_db results/nangate45/practical_macro_soc_50/run_1/3_place.odb
+write_def results/nangate45/practical_macro_soc_50/run_1/3_place.def
 exit
 EOF
 
 exit
 ```
+![Workspace path inside container](images/def,lef.png)
 
 ### 11.3. Export cho MacroPlacement
 
 ```bash
 cd /home/khoahd/Documents/DATN-1
 ./openroad_docker_lab/scripts/export_flow_inputs.sh \
-  nangate45 practical_macro_soc_50 practical50_run_tight2 practical_macro_soc_50_tight2
+  nangate45 practical_macro_soc_50 run_1 practical_macro_soc_50_run_1
+```
+
+Nếu vừa export trong container:
+
+```bash
+sudo chown -R khoahd:khoahd \
+  /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1
 ```
 
 ### 11.4. Chạy `flow.py`
 
 ```bash
+cd /home/khoahd/Documents/DATN-1
 source rl_env/bin/activate
 
 python MacroPlacement/Flows/util/flow.py \
-  MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2 \
-  MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/output_CodeElement
+  MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1 \
+  MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/output_CodeElement
 ```
+![Workspace path inside container](images/MacroPlacement_50macro.png)
+Lệnh này chạy trên host, không chạy với path `/workspace/DATN/...`.
 
 ### 11.5. Train RL
 
 ```bash
 python rl_macroplacement_agent/scripts/train_ppo.py \
-  --netlist /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/practical_macro_soc_50.pb.txt \
-  --init_plc /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/practical_macro_soc_50.plc \
-  --out_dir /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_ppo \
+  --netlist /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/practical_macro_soc_50.pb.txt \
+  --init_plc /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/practical_macro_soc_50.plc \
+  --out_dir /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_ppo \
   --episodes 30 \
   --rollout_episodes 4 \
   --max_macros 50 \
@@ -734,18 +783,19 @@ python rl_macroplacement_agent/scripts/train_ppo.py \
   --congestion_weight 0.5 \
   --batch_size 1 \
   --seed 1 \
-  --log_steps \
   --device cpu
 ```
-
+![Workspace path inside container](images/RL_training.png)
+Kết quả log:
+![Workspace path inside container](images/RL_train_log.png)
 ### 11.6. Eval RL
 
 ```bash
 python rl_macroplacement_agent/scripts/eval_policy.py \
-  --model /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_ppo/alphachip_like_actor_critic.pt \
-  --netlist /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/practical_macro_soc_50.pb.txt \
-  --init_plc /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/practical_macro_soc_50.plc \
-  --out_dir /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_eval \
+  --model /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_ppo/alphachip_like_actor_critic.pt \
+  --netlist /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/practical_macro_soc_50.pb.txt \
+  --init_plc /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/practical_macro_soc_50.plc \
+  --out_dir /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_eval \
   --max_macros 50 \
   --max_nodes 4096 \
   --max_edges 12000 \
@@ -756,26 +806,28 @@ python rl_macroplacement_agent/scripts/eval_policy.py \
   --device cpu \
   --deterministic
 ```
-
+![Workspace path inside container](images/RL_eval.png)
+Kết quả plc:
+![Workspace path inside container](images/RL_eval_log.png)
 ### 11.7. Convert sang TCL
 
 ```bash
 python MacroPlacement/Flows/util/plc_pb_to_placement_tcl.py \
-  /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_eval/alphachip_like_final.plc \
-  /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/practical_macro_soc_50.pb.txt \
-  /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_eval/final_from_plc.tcl
+  /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_eval/alphachip_like_final.plc \
+  /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/practical_macro_soc_50.pb.txt \
+  /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_eval/final_from_plc.tcl
 ```
 
 Nếu macro bị lệch ra ngoài core khi source lên GUI:
 
 ```bash
 python rl_macroplacement_agent/scripts/clamp_place_tcl_to_def_core.py \
-  --in_tcl /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_eval/final_from_plc.tcl \
-  --pb /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_tight2/practical_macro_soc_50.pb.txt \
-  --def_file /home/khoahd/Documents/DATN-1/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/practical_macro_soc_50/practical50_run_tight2/3_place.def \
-  --out_tcl /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/practical50_run_tight2_eval/final_from_plc_clamped.tcl
+  --in_tcl /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_eval/final_from_plc.tcl \
+  --pb /home/khoahd/Documents/DATN-1/MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/practical_macro_soc_50.pb.txt \
+  --def_file /home/khoahd/Documents/DATN-1/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/practical_macro_soc_50/run_1/3_place.def \
+  --out_tcl /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_eval/final_from_plc_clamped.tcl
 ```
-
+![Workspace path inside container](images/tcl_clamp.png)
 ### 11.8. Xem trên GUI
 
 ```bash
@@ -794,7 +846,27 @@ openroad -gui
 Trong OpenROAD:
 
 ```tcl
-read_db ./results/nangate45/practical_macro_soc_50/practical50_run_tight2/2_1_floorplan.odb
-source /workspace/DATN/experiments/practical_macro_soc_50/practical50_run_tight2_eval/final_from_plc_clamped.tcl
+read_db ./results/nangate45/practical_macro_soc_50/run_1/2_1_floorplan.odb
+source /workspace/DATN/experiments/practical_macro_soc_50/run_1_eval/final_from_plc_clamped.tcl
 gui::fit
 ```
+
+```tcl
+read_db ./results/nangate45/practical_macro_soc_50/run_1/2_1_floorplan.odb
+source /workspace/DATN/experiments/practical_macro_soc_50/run_1_eval/final_from_plc_clamped.tcl
+gui::fit
+```
+Kết quả RL Placement trên Openroad 
+![Workspace path inside container](images/Openroad_RL_placement.png)
+
+Lệnh tạo vị trí vật lý cho các bước tiếp theo hoàn thiện chu trình thiết kế vật lý EDA(CTS,Routing,etc..):
+
+Sau khi source thiết kế .tcl
+```tcl
+write_db /workspace/DATN/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/practical_macro_soc_50/run_1/rl_placed.odb
+```
+hoặc:
+```tcl
+write_def /workspace/DATN/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/practical_macro_soc_50/run_1/rl_placed.def
+```
+![Workspace path inside container](images/RL_def_odb.png)

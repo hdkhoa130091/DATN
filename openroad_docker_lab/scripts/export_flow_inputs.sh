@@ -185,7 +185,9 @@ if [ -z "\$SCRIPT_PATH" ]; then
   echo "usage: ./openroad <script.tcl>" >&2
   exit 2
 fi
-python3 "${ROOT_DIR}/MacroPlacement/Flows/util/openroad_partition_compat.py" "\$SCRIPT_PATH"
+SCRIPT_DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="\$(cd "\${SCRIPT_DIR}/../../../../../.." && pwd)"
+python3 "\${REPO_ROOT}/MacroPlacement/Flows/util/openroad_partition_compat.py" "\$SCRIPT_PATH"
 EOF
 chmod +x "${RUN_DIR}/openroad"
 

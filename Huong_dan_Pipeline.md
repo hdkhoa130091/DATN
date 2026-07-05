@@ -179,7 +179,7 @@ pipeline python scripts ok
 ```
 
 Kết quả trong Docker:
-![Workspace path inside container](images/docker.png)
+![Workspace path inside container](openroad_docker_lab/images/docker.png)
 
 
 Lưu ý:
@@ -717,7 +717,7 @@ make -j1 \
   FLOW_VARIANT=run_1 \
   synth
 ```
-![Workspace path inside container](images/synthesis.png)
+![Workspace path inside container](openroad_docker_lab/images/synthesis.png)
 
 Floorplanning:
 ```bash
@@ -726,7 +726,7 @@ make -j1 \
   FLOW_VARIANT=run_1 \
   do-floorplan
 ```
-![Workspace path inside container](images/floorplanning.png)
+![Workspace path inside container](openroad_docker_lab/images/floorplanning.png)
 
 Placement:
 ```bash
@@ -735,7 +735,7 @@ make -j1 \
   FLOW_VARIANT=run_1 \
   do-place
 ```
-![Workspace path inside container](images/placement.png)
+![Workspace path inside container](openroad_docker_lab/images/placement.png)
 
 ### 11.2. DEF nếu thiếu
 
@@ -748,7 +748,7 @@ EOF
 
 exit
 ```
-![Workspace path inside container](images/def,lef.png)
+![Workspace path inside container](openroad_docker_lab/images/def,lef.png)
 
 ### 11.3. Export cho MacroPlacement
 
@@ -775,7 +775,7 @@ python MacroPlacement/Flows/util/flow.py \
   MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1 \
   MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/output_CodeElement
 ```
-![Workspace path inside container](images/MacroPlacement_50macro.png)
+![Workspace path inside container](openroad_docker_lab/images/MacroPlacement_50macro.png)
 Lệnh này chạy trên host, không chạy với path `/workspace/DATN/...`.
 
 ### 11.5. Train RL
@@ -798,9 +798,9 @@ python rl_macroplacement_agent/scripts/train_ppo.py \
   --seed 1 \
   --device cpu
 ```
-![Workspace path inside container](images/RL_training.png)
+![Workspace path inside container](openroad_docker_lab/images/RL_training.png)
 Kết quả log:
-![Workspace path inside container](images/RL_train_log.png)
+![Workspace path inside container](openroad_docker_lab/images/RL_train_log.png)
 ### 11.6. Eval RL
 
 ```bash
@@ -819,9 +819,9 @@ python rl_macroplacement_agent/scripts/eval_policy.py \
   --device cpu \
   --deterministic
 ```
-![Workspace path inside container](images/RL_eval.png)
+![Workspace path inside container](openroad_docker_lab/images/RL_eval.png)
 Kết quả plc:
-![Workspace path inside container](images/RL_eval_log.png)
+![Workspace path inside container](openroad_docker_lab/images/RL_eval_log.png)
 ### 11.7. Convert sang TCL
 
 ```bash
@@ -840,7 +840,7 @@ python rl_macroplacement_agent/scripts/clamp_place_tcl_to_def_core.py \
   --def_file /home/khoahd/Documents/DATN-1/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/practical_macro_soc_50/run_1/3_place.def \
   --out_tcl /home/khoahd/Documents/DATN-1/experiments/practical_macro_soc_50/run_1_eval/final_from_plc_clamped.tcl
 ```
-![Workspace path inside container](images/tcl_clamp.png)
+![Workspace path inside container](openroad_docker_lab/images/tcl_clamp.png)
 ### 11.8. Xem trên GUI
 
 ```bash
@@ -870,7 +870,7 @@ source /workspace/DATN/experiments/practical_macro_soc_50/run_1_eval/final_from_
 gui::fit
 ```
 Kết quả RL Placement trên Openroad 
-![Workspace path inside container](images/Openroad_RL_placement.png)
+![Workspace path inside container](openroad_docker_lab/images/Openroad_RL_placement.png)
 
 Lệnh tạo vị trí vật lý cho các bước tiếp theo hoàn thiện chu trình thiết kế vật lý EDA(CTS,Routing,etc..):
 
@@ -882,4 +882,4 @@ hoặc:
 ```tcl
 write_def /workspace/DATN/openroad_docker_lab/OpenROAD-flow-scripts/flow/results/nangate45/practical_macro_soc_50/run_1/rl_placed.def
 ```
-![Workspace path inside container](images/RL_def_odb.png)
+![Workspace path inside container](openroad_docker_lab/images/RL_def_odb.png)

@@ -1,38 +1,38 @@
 # `practical_macro_soc_50` `run_1` Artifacts
 
-Thu muc nay luu bo artifact da chay san cho workflow `practical_macro_soc_50` voi
+Thư mục này lưu bộ artifact đã chạy sẵn cho workflow `practical_macro_soc_50` với
 `FLOW_VARIANT=run_1`.
 
-## Noi dung
+## Nội dung
 
 - `train/`
   - `alphachip_like_actor_critic.pt`: model sau khi train
-  - `alphachip_like_train_summary.json`: tom tat train
-  - `alphachip_like_training_history.csv`: lich su train theo episode
+  - `alphachip_like_train_summary.json`: tóm tắt train
+  - `alphachip_like_training_history.csv`: lịch sử train theo từng episode
 - `eval/`
-  - `alphachip_like_eval_summary.json`: tom tat evaluation
-  - `alphachip_like_final.plc`: placement cuoi do policy sinh ra
-  - `final_from_plc.tcl`: Tcl convert tu `alphachip_like_final.plc`
-  - `final_from_plc_clamped.tcl`: Tcl da clamp vao core
+  - `alphachip_like_eval_summary.json`: tóm tắt evaluation
+  - `alphachip_like_final.plc`: placement cuối do policy sinh ra
+  - `final_from_plc.tcl`: Tcl convert từ `alphachip_like_final.plc`
+  - `final_from_plc_clamped.tcl`: Tcl đã clamp vào core
 - `macroplacement_input/`
-  - `practical_macro_soc_50.pb.txt`: dau vao graph cho RL
+  - `practical_macro_soc_50.pb.txt`: đầu vào graph cho RL
   - `practical_macro_soc_50.plc`: initial placement sau `flow.py`
 - `openroad/`
-  - `3_place.def`: placement DEF goc tu ORFS
-  - `rl_placed.def`: DEF sau khi source ket qua RL vao OpenROAD
+  - `3_place.def`: placement DEF gốc từ ORFS
+  - `rl_placed.def`: DEF sau khi source kết quả RL vào OpenROAD
 
-## Muc dich
+## Mục đích
 
-Bo artifact nay cho phep:
+Bộ artifact này cho phép:
 
-- doi chieu ket qua train/eval ma khong can chay lai tu dau
-- mo ket qua RL tren OpenROAD bang `final_from_plc_clamped.tcl`
-- tiep tuc cac buoc backend nhu CTS tu placement da duoc RL cap nhat
+- đối chiếu kết quả train/eval mà không cần chạy lại từ đầu
+- mở kết quả RL trên OpenROAD bằng `final_from_plc_clamped.tcl`
+- tiếp tục các bước backend như CTS từ placement đã được RL cập nhật
 
-## Khong bao gom
+## Không bao gồm
 
-- cac file `.odb` lon
-- toan bo log ORFS trung gian
-- toan bo thu muc `generated/` va `results/`
+- các file `.odb` lớn
+- toàn bộ log ORFS trung gian
+- toàn bộ thư mục `generated/` và `results/`
 
-Neu can tai hien full pipeline, hay dung `openroad_docker_lab/FULL_EDA_RL_PIPELINE.md`.
+Nếu cần tái hiện full pipeline, hãy dùng [Huong_dan_Pipeline.md](../../../Huong_dan_Pipeline.md).

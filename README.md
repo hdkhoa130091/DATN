@@ -10,6 +10,13 @@ MacroPlacement benchmark
 -> OpenROAD / proxy evaluation
 ```
 
+## Tài liệu chính
+
+- [Huong_dan_Pipeline.md](Huong_dan_Pipeline.md)
+  - hướng dẫn đầy đủ từ ORFS, `flow.py`, train/eval RL, convert Tcl, OpenROAD GUI
+- [artifacts/practical_macro_soc_50/run_1/README.md](artifacts/practical_macro_soc_50/run_1/README.md)
+  - bộ artifact đã chạy sẵn cho `practical_macro_soc_50` với `run_1`
+
 ## Thành phần chính còn lại
 
 - `MacroPlacement/`
@@ -18,10 +25,8 @@ MacroPlacement benchmark
   - code RL chính
 - `openroad_docker_lab/`
   - Docker để chạy OpenROAD và xem GUI
-- `datn_docker_env/`
-  - Docker cho môi trường RL / DreamPlace
-- `bao_cao_hoc_tang_cuong_pandoc.md`
-  - báo cáo hiện tại
+- `artifacts/`
+  - nơi lưu các kết quả đã chạy sẵn, gọn và đủ dùng để tái hiện
 
 ## Flow dữ liệu ngắn gọn
 
@@ -111,13 +116,10 @@ rl_macroplacement_agent/scripts/policy_model.py
 rl_macroplacement_agent/scripts/ppo_agent.py
 rl_macroplacement_agent/scripts/train_ppo.py
 rl_macroplacement_agent/scripts/eval_policy.py
-rl_macroplacement_agent/scripts/eval_proxy.py
-rl_macroplacement_agent/scripts/run_dreamplace_baseline.py
-rl_macroplacement_agent/scripts/convert_bookshelf_pl_to_plc.py
 rl_macroplacement_agent/scripts/plc_to_openroad_tcl.py
 ```
 
 ## Ghi chú
 
-- Repo đã bỏ nhánh `MaskablePPO` cũ và các tài liệu trùng lặp cấp repo.
-- `install_dreamplace.sh` tự dò GPU/CUDA; không cần giữ riêng flow CPU-only và GPU-only.
+- `README.md` vẫn là trang hiển thị đầu repo trên GitHub.
+- Tài liệu pipeline đầy đủ đã được chuyển thành `Huong_dan_Pipeline.md` ở đầu repository.

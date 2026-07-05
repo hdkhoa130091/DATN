@@ -688,6 +688,19 @@ Phải dùng `plc` đã được normalize metadata đúng với NanGate45 trư�
 Ví dụ dưới đây dùng `run_1` để dễ thay lại cho các testcase khác. Bạn chỉ cần
 đổi `FLOW_VARIANT=run_1` sang tên lần chạy khác nếu muốn.
 
+Artifact da chay san cho vi du nay duoc luu tai:
+
+```text
+artifacts/practical_macro_soc_50/run_1/
+```
+
+Thu muc nay gom:
+
+- `train/`: model va train summary
+- `eval/`: final `.plc`, eval summary, `final_from_plc.tcl`, `final_from_plc_clamped.tcl`
+- `macroplacement_input/`: `practical_macro_soc_50.pb.txt` va `practical_macro_soc_50.plc`
+- `openroad/`: `3_place.def` va `rl_placed.def`
+
 ### 11.1. ORFS
 
 ```bash

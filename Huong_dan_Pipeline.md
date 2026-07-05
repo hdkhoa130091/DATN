@@ -776,6 +776,7 @@ python MacroPlacement/Flows/util/flow.py \
   MacroPlacement/Flows/NanGate45/generated/practical_macro_soc_50/practical_macro_soc_50_run_1/output_CodeElement
 ```
 ![Workspace path inside container](openroad_docker_lab/images/MacroPlacement_50macro.png)
+
 Lệnh này chạy trên host, không chạy với path `/workspace/DATN/...`.
 
 ### 11.5. Train RL

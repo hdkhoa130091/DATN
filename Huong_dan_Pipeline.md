@@ -802,6 +802,7 @@ python rl_macroplacement_agent/scripts/train_ppo.py \
 ![Workspace path inside container](openroad_docker_lab/images/RL_training.png)
 
 Kết quả log:
+
 ![Workspace path inside container](openroad_docker_lab/images/RL_train_log.png)
 ### 11.6. Eval RL
 
@@ -824,6 +825,7 @@ python rl_macroplacement_agent/scripts/eval_policy.py \
 ![Workspace path inside container](openroad_docker_lab/images/RL_eval.png)
 
 Kết quả plc:
+
 ![Workspace path inside container](openroad_docker_lab/images/RL_eval_log.png)
 ### 11.7. Convert sang TCL
 
